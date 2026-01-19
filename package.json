@@ -1,0 +1,24 @@
+{
+  "name": "caswino",
+  "version": "1.0.0",
+  "main": "index.html",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build && node critical.js",
+    "preview": "vite preview"
+  },
+  "devDependencies": {
+    "critical": "^7.2.1",
+    "cssnano": "^7.1.2",
+    "sass": "^1.97.2",
+    "terser": "^5.44.1",
+    "vite": "^7.3.0",
+    "vite-plugin-html": "^3.2.2"
+  },
+  "type": "module",
+  "dependencies": {
+    "gsap": "^3.14.2",
+    "shake.js": "^1.2.2",
+    "wheel-fortune": "^4.0.9"
+  }
+}
