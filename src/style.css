@@ -157,3 +157,7 @@ main {
   25% { transform: translateX(-5px) rotate(-1deg); }
   75% { transform: translateX(5px) rotate(1deg); }
 }
+
+.dn {
+  display: none;
+}
