@@ -3,7 +3,7 @@ import gsap from "gsap";
 
 const chest = document.getElementById("chest");
 const progressBar = document.getElementById("progress-bar");
-const frames = ["./assets/shaking1.png", "./assets/shaking2.png", "./assets/shaking3.png"];
+const frames = ["/assets/shaking1.png", "/assets/shaking2.png", "/assets/shaking3.png"];
 
 let progress = 0;
 let isOpened = false;
