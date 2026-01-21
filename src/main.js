@@ -1,9 +1,36 @@
 import "./style.css";
 import gsap from "gsap";
 
+// Явно импортируем ВСЕ изображения
+import bg from './assets/bg.png';
+import logo from './assets/logo.svg';
+import hand from './assets/hand.png';
+import shaking1 from './shaking1.png';
+import shaking2 from './shaking2.png';
+import shaking3 from './shaking3.png';
+
 const chest = document.getElementById("chest");
 const progressBar = document.getElementById("progress-bar");
-const frames = ["./shaking1.png", "./shaking2.png", "./shaking3.png"];
+
+// Используем импортированные изображения
+const frames = [shaking1, shaking2, shaking3];
+
+// Устанавливаем начальное изображение
+chest.src = frames[0];
+
+// Устанавливаем другие изображения после загрузки DOM
+document.addEventListener('DOMContentLoaded', () => {
+  // Устанавливаем фон
+  document.querySelector('main').style.backgroundImage = `url(${bg})`;
+  
+  // Устанавливаем логотип
+  const logoImg = document.querySelector('.logo');
+  if (logoImg) logoImg.src = logo;
+  
+  // Устанавливаем руку
+  const handImg = document.querySelector('.hand');
+  if (handImg) handImg.src = hand;
+});
 
 let progress = 0;
 let isOpened = false;
