@@ -1,6 +1,5 @@
 import "./style.css";
 import gsap from "gsap";
-import Shake from "shake.js";
 
 const chest = document.getElementById("chest");
 const progressBar = document.getElementById("progress-bar");
@@ -10,136 +9,310 @@ let progress = 0;
 let isOpened = false;
 let isShaking = false;
 let lastShakeTime = 0;
-const SHAKE_INTERVAL = 200; // Минимальный интервал между встряхиваниями (мс)
+let lastAcceleration = { x: 0, y: 0, z: 0 };
+let shakeCount = 0;
 
-// Инициализация - показываем первую картинку
-chest.src = frames[0];
+// Конфигурация
+const CONFIG = {
+  shakeThreshold: 3.5, // Порог силы встряхивания (из ваших логов видно, что норма ~1.44 при обычном движении)
+  shakeTimeout: 400,   // Время между встряхиваниями (мс)
+  progressPerShake: 8, // Прогресс за одно встряхивание (%)
+  decayRate: 0.3,      // Скорость уменьшения прогресса (% в секунду)
+  minProgressForShaking2: 30 // Минимальный прогресс для показа shaking2.png
+};
 
-// Функция обновления прогресса и картинки сундука
+// Инициализация
+function init() {
+  chest.src = frames[0];
+  progressBar.style.width = "0%";
+  
+  // Запускаем автоуменьшение прогресса
+  startProgressDecay();
+  
+  // Запускаем детектор встряхивания
+  if (window.DeviceMotionEvent) {
+    startShakeDetection();
+  } else {
+    console.warn("DeviceMotion не поддерживается в этом браузере");
+    // Альтернатива для тестирования на ПК
+    setupClickFallback();
+  }
+}
+
+// Собственная реализация детектора встряхивания
+function startShakeDetection() {
+  let lastUpdate = 0;
+  const updateInterval = 100; // Проверяем каждые 100мс
+  
+  window.addEventListener('devicemotion', (event) => {
+    const now = Date.now();
+    if (now - lastUpdate < updateInterval) return;
+    lastUpdate = now;
+    
+    const acceleration = event.accelerationIncludingGravity || 
+                        event.acceleration || 
+                        { x: 0, y: 0, z: 0 };
+    
+    // Рассчитываем изменение ускорения
+    const delta = {
+      x: Math.abs(acceleration.x - lastAcceleration.x),
+      y: Math.abs(acceleration.y - lastAcceleration.y),
+      z: Math.abs(acceleration.z - lastAcceleration.z)
+    };
+    
+    // Суммарное изменение по всем осям
+    const totalDelta = delta.x + delta.y + delta.z;
+    
+    // Для отладки - выводим в консоль
+    console.log(`[${new Date().toLocaleTimeString()}] acc x:${acceleration.x.toFixed(2)} y:${acceleration.y.toFixed(2)} z:${acceleration.z.toFixed(2)} delta:${totalDelta.toFixed(2)}`);
+    
+    // Проверяем, достаточно ли сильное встряхивание
+    if (totalDelta > CONFIG.shakeThreshold) {
+      handleShake();
+    }
+    
+    // Сохраняем текущие значения для следующего сравнения
+    lastAcceleration = {
+      x: acceleration.x || 0,
+      y: acceleration.y || 0,
+      z: acceleration.z || 0
+    };
+  });
+}
+
+// Обработка встряхивания
+function handleShake() {
+  const currentTime = Date.now();
+  
+  // Проверяем, не слишком ли часто трясём
+  if (currentTime - lastShakeTime < CONFIG.shakeTimeout) {
+    return;
+  }
+  
+  lastShakeTime = currentTime;
+  shakeCount++;
+  
+  console.log(`Встряхивание #${shakeCount} обнаружено!`);
+  
+  // Увеличиваем прогресс
+  updateProgress(CONFIG.progressPerShake);
+}
+
+// Обновление прогресса
 function updateProgress(increment) {
-  if (isOpened) return; // Если уже открыт, не обновляем
+  if (isOpened) return;
   
+  const oldProgress = progress;
   progress = Math.min(progress + increment, 100);
-  progressBar.style.width = progress + "%";
   
-  // Обновляем картинку сундука в зависимости от прогресса
-  if (progress < 50) {
+  // Анимация прогресс-бара
+  gsap.to(progressBar, {
+    width: `${progress}%`,
+    duration: 0.3,
+    ease: "power2.out",
+    onUpdate: function() {
+      // Обновляем картинку сундука в зависимости от прогресса
+      updateChestImage();
+    }
+  });
+  
+  // Если достигли 100%, открываем сундук
+  if (progress >= 100 && !isOpened) {
+    openChest();
+  }
+}
+
+// Обновление картинки сундука
+function updateChestImage() {
+  if (isOpened) return;
+  
+  if (progress < CONFIG.minProgressForShaking2) {
     chest.src = frames[0]; // shaking1.png
     isShaking = false;
   } else if (progress < 100) {
     chest.src = frames[1]; // shaking2.png
-    isShaking = true;
     
-    // Анимация встряхивания при среднем прогрессе
-    gsap.fromTo(
-      chest,
-      { x: -3 },
-      { 
-        x: 3, 
-        duration: 0.1, 
-        repeat: 4, 
-        yoyo: true, 
-        ease: "power1.inOut" 
-      }
-    );
-  } else {
-    // 100% - открываем сундук
-    chest.src = frames[2]; // shaking3.png
-    isOpened = true;
-    isShaking = false;
-    
-    // Запускаем анимацию открытия
-    animateChest();
-    
-    // Останавливаем отслеживание встряхивания
-    myShakeEvent.stop();
+    // Добавляем анимацию встряхивания только если недавно было встряхивание
+    if (Date.now() - lastShakeTime < 500 && !isShaking) {
+      isShaking = true;
+      animateShaking();
+    }
   }
 }
 
-// Функция анимации открытия сундука
-function animateChest() {
-  gsap.fromTo(
-    chest,
-    { filter: "brightness(2)" },
-    { filter: "brightness(1)", duration: 0.25, ease: "power2.out" }
-  );
+// Анимация встряхивания сундука
+function animateShaking() {
+  if (isOpened) return;
   
-  gsap.fromTo(
-    chest,
-    { filter: "drop-shadow(0 0 20px gold)" },
-    { filter: "drop-shadow(0 0 0px gold)", duration: 0.4, ease: "power2.out" }
-  );
+  gsap.killTweensOf(chest);
   
+  gsap.fromTo(chest,
+    { x: -5, rotation: -2 },
+    {
+      x: 5,
+      rotation: 2,
+      duration: 0.08,
+      repeat: 3,
+      yoyo: true,
+      ease: "power1.inOut",
+      onComplete: () => {
+        gsap.to(chest, { x: 0, rotation: 0, duration: 0.1 });
+        isShaking = false;
+      }
+    }
+  );
+}
+
+// Открытие сундука
+function openChest() {
+  isOpened = true;
+  chest.src = frames[2]; // shaking3.png
+  
+  console.log("Сундук открыт!");
+  
+  // Анимация открытия
   gsap.to(chest, {
-    scale: 1.1,
+    scale: 1.15,
     duration: 0.5,
     yoyo: true,
     repeat: 1,
     ease: "power2.inOut"
   });
   
-  // Добавляем частицы (если нужно)
-  // gsap.from(".particle", {
-  //   y: 20,
-  //   opacity: 0,
-  //   duration: 0.6,
-  //   stagger: 0.05,
-  //   ease: "power2.out"
-  // });
-}
-
-// Инициализация Shake.js
-const myShakeEvent = new Shake({
-  threshold: 15,
-  timeout: 300
-});
-
-myShakeEvent.start();
-
-// Обработчик встряхивания
-function shakeEventDidOccur() {
-  if (isOpened) return; // Если сундук уже открыт, игнорируем
-  
-  const currentTime = Date.now();
-  if (currentTime - lastShakeTime < SHAKE_INTERVAL) return; // Защита от слишком частых срабатываний
-  
-  lastShakeTime = currentTime;
-  
-  // Увеличиваем прогресс на 5% за каждое встряхивание
-  updateProgress(5);
-  
-  // Если начали встряхивать и прогресс между 50-99%, показываем shaking2.png
-  if (progress >= 50 && progress < 100 && !isShaking) {
-    chest.src = frames[1];
-    isShaking = true;
-  }
-}
-
-// Добавляем обработчик события
-window.addEventListener("shake", shakeEventDidOccur, false);
-
-// Автоматическое уменьшение прогресса со временем (опционально)
-let decayInterval = setInterval(() => {
-  if (progress > 0 && !isOpened) {
-    progress = Math.max(progress - 0.5, 0);
-    progressBar.style.width = progress + "%";
-    
-    // Если прогресс упал ниже 50%, возвращаем первую картинку
-    if (progress < 50 && isShaking) {
-      chest.src = frames[0];
-      isShaking = false;
+  gsap.fromTo(chest,
+    { filter: "brightness(1) drop-shadow(0 0 0px gold)" },
+    {
+      filter: "brightness(1.3) drop-shadow(0 0 20px gold)",
+      duration: 0.5,
+      repeat: 1,
+      yoyo: true
     }
-  }
-}, 1000);
-
-// Очистка интервала при открытии сундука
-if (isOpened) {
-  clearInterval(decayInterval);
+  );
+  
+  // Отключаем автоуменьшение прогресса
+  stopProgressDecay();
+  
+  // Показываем сообщение об успехе
+  showSuccessMessage();
 }
 
-// Для тестирования на ПК - добавляем клик как альтернативу встряхиванию
-document.addEventListener("click", () => {
-  if (!isOpened) {
-    updateProgress(10);
+// Автоматическое уменьшение прогресса
+let decayInterval;
+
+function startProgressDecay() {
+  decayInterval = setInterval(() => {
+    if (progress > 0 && !isOpened) {
+      const oldProgress = progress;
+      progress = Math.max(progress - CONFIG.decayRate, 0);
+      
+      gsap.to(progressBar, {
+        width: `${progress}%`,
+        duration: 0.5,
+        ease: "power1.out",
+        onUpdate: () => {
+          // Если прогресс упал ниже порога, возвращаем первую картинку
+          if (progress < CONFIG.minProgressForShaking2 && oldProgress >= CONFIG.minProgressForShaking2) {
+            chest.src = frames[0];
+            isShaking = false;
+          }
+        }
+      });
+    }
+  }, 1000);
+}
+
+function stopProgressDecay() {
+  if (decayInterval) {
+    clearInterval(decayInterval);
   }
-});
+}
+
+// Показ сообщения об успехе
+function showSuccessMessage() {
+  const message = document.createElement('div');
+  message.innerHTML = `
+    <div style="
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: rgba(0,0,0,0.8);
+      color: gold;
+      padding: 20px;
+      border-radius: 15px;
+      text-align: center;
+      font-family: Arial, sans-serif;
+      z-index: 1000;
+    ">
+      <h2>🎉 Сундук открыт! 🎉</h2>
+      <p>Вы сделали ${shakeCount} встряхиваний</p>
+    </div>
+  `;
+  document.querySelector('main').appendChild(message);
+  
+  // Автоматическое скрытие сообщения
+  setTimeout(() => {
+    message.style.opacity = '0';
+    setTimeout(() => message.remove(), 1000);
+  }, 3000);
+}
+
+// Альтернатива для тестирования на ПК
+function setupClickFallback() {
+  console.log("Используется клик-режим для тестирования на ПК");
+  
+  let clickCount = 0;
+  document.addEventListener('click', (e) => {
+    if (isOpened) return;
+    
+    clickCount++;
+    console.log(`Клик #${clickCount} (эмуляция встряхивания)`);
+    
+    // Эмулируем встряхивание при клике
+    handleShake();
+    
+    // Визуальная обратная связь
+    gsap.fromTo(document.body,
+      { backgroundColor: '#ffffff' },
+      { backgroundColor: '#f0f0f0', duration: 0.1, yoyo: true, repeat: 1 }
+    );
+  });
+  
+  // Добавляем инструкцию
+  const instruction = document.createElement('div');
+  instruction.innerHTML = `
+    <div style="
+      position: absolute;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0,0,0,0.7);
+      color: white;
+      padding: 10px 20px;
+      border-radius: 10px;
+      text-align: center;
+      font-family: Arial, sans-serif;
+      z-index: 1000;
+    ">
+      <p>Для тестирования: кликайте по экрану (на мобильном - встряхивайте устройство)</p>
+    </div>
+  `;
+  document.querySelector('main').appendChild(instruction);
+}
+
+// Инициализация при загрузке
+document.addEventListener('DOMContentLoaded', init);
+
+// Для отладки в консоли
+window.debugProgress = function(amount = 10) {
+  updateProgress(amount);
+};
+
+window.resetProgress = function() {
+  progress = 0;
+  isOpened = false;
+  chest.src = frames[0];
+  progressBar.style.width = '0%';
+  shakeCount = 0;
+  console.log("Прогресс сброшен");
+};
