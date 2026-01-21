@@ -3,7 +3,7 @@ import gsap from "gsap";
 
 const chest = document.getElementById("chest");
 const progressBar = document.getElementById("progress-bar");
-const frames = ["/assets/shaking1.png", "/assets/shaking2.png", "/assets/shaking3.png"];
+const frames = ["./shaking1.png", "./shaking2.png", "./shaking3.png"];
 
 let progress = 0;
 let isOpened = false;
@@ -14,7 +14,7 @@ let shakeCount = 0;
 
 // Конфигурация
 const CONFIG = {
-  shakeThreshold: 3.5, // Порог силы встряхивания (из ваших логов видно, что норма ~1.44 при обычном движении)
+  shakeThreshold: 3.5, // Порог силы встряхивания
   shakeTimeout: 400,   // Время между встряхиваниями (мс)
   progressPerShake: 8, // Прогресс за одно встряхивание (%)
   decayRate: 0.3,      // Скорость уменьшения прогресса (% в секунду)
