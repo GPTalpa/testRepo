@@ -30,22 +30,30 @@ document.addEventListener('DOMContentLoaded', () => {
   // Устанавливаем руку
   const handImg = document.querySelector('.hand');
   if (handImg) handImg.src = hand;
+  
+  // Инициализируем приложение
+  init();
 });
 
 let progress = 0;
 let isOpened = false;
 let isShaking = false;
 let lastShakeTime = 0;
-let lastAcceleration = { x: 0, y: 0, z: 0 };
+let lastAcceleration = null;
 let shakeCount = 0;
+let shakeSamples = [];
+const SHAKE_SAMPLE_SIZE = 5;
 
 // Конфигурация
 const CONFIG = {
-  shakeThreshold: 3.5, // Порог силы встряхивания
-  shakeTimeout: 400,   // Время между встряхиваниями (мс)
-  progressPerShake: 8, // Прогресс за одно встряхивание (%)
-  decayRate: 0.3,      // Скорость уменьшения прогресса (% в секунду)
-  minProgressForShaking2: 30 // Минимальный прогресс для показа shaking2.png
+  shakeThreshold: 15,   // УВЕЛИЧИЛИ порог силы встряхивания
+  shakeTimeout: 500,    // Время между встряхиваниями (мс)
+  progressPerShake: 5,  // УМЕНЬШИЛИ прогресс за одно встряхивание
+  decayRate: 0.5,       // Скорость уменьшения прогресса (% в секунду)
+  minProgressForShaking2: 30, // Минимальный прогресс для показа shaking2.png
+  minShakeInterval: 300,      // Минимальный интервал между встряхиваниями
+  maxShakeSamples: 10,        // Максимальное количество образцов для усреднения
+  stabilityThreshold: 2.0     // Порог стабильности (ниже этого - телефон лежит)
 };
 
 // Инициализация
@@ -58,15 +66,38 @@ function init() {
   
   // Запускаем детектор встряхивания
   if (window.DeviceMotionEvent) {
-    startShakeDetection();
+    requestMotionPermission();
   } else {
     console.warn("DeviceMotion не поддерживается в этом браузере");
-    // Альтернатива для тестирования на ПК
     setupClickFallback();
   }
 }
 
-// Собственная реализация детектора встряхивания
+// Запрос разрешения на доступ к акселерометру (особенно важно для iOS)
+async function requestMotionPermission() {
+  // Проверяем, нужны ли разрешения (iOS 13+)
+  if (typeof DeviceMotionEvent !== 'undefined' && 
+      typeof DeviceMotionEvent.requestPermission === 'function') {
+    try {
+      const permission = await DeviceMotionEvent.requestPermission();
+      if (permission === 'granted') {
+        console.log("Разрешение на доступ к акселерометру получено");
+        startShakeDetection();
+      } else {
+        console.warn("Разрешение на доступ к акселерометру отклонено");
+        setupClickFallback();
+      }
+    } catch (error) {
+      console.error("Ошибка при запросе разрешения:", error);
+      setupClickFallback();
+    }
+  } else {
+    // Для Android и других браузеров
+    startShakeDetection();
+  }
+}
+
+// Улучшенный детектор встряхивания
 function startShakeDetection() {
   let lastUpdate = 0;
   const updateInterval = 100; // Проверяем каждые 100мс
@@ -80,6 +111,21 @@ function startShakeDetection() {
                         event.acceleration || 
                         { x: 0, y: 0, z: 0 };
     
+    // Пропускаем, если данные неполные
+    if (acceleration.x === null || acceleration.y === null || acceleration.z === null) {
+      return;
+    }
+    
+    // Инициализируем lastAcceleration при первом вызове
+    if (!lastAcceleration) {
+      lastAcceleration = {
+        x: acceleration.x || 0,
+        y: acceleration.y || 0,
+        z: acceleration.z || 0
+      };
+      return;
+    }
+    
     // Рассчитываем изменение ускорения
     const delta = {
       x: Math.abs(acceleration.x - lastAcceleration.x),
@@ -87,14 +133,36 @@ function startShakeDetection() {
       z: Math.abs(acceleration.z - lastAcceleration.z)
     };
     
-    // Суммарное изменение по всем осям
-    const totalDelta = delta.x + delta.y + delta.z;
+    // Векторная норма изменения ускорения (более точная, чем сумма)
+    const totalDelta = Math.sqrt(delta.x * delta.x + delta.y * delta.y + delta.z * delta.z);
+    
+    // Норма текущего ускорения (для фильтрации стабильных состояний)
+    const currentMagnitude = Math.sqrt(
+      acceleration.x * acceleration.x + 
+      acceleration.y * acceleration.y + 
+      acceleration.z * acceleration.z
+    );
+    
+    // Добавляем образец в историю
+    shakeSamples.push(totalDelta);
+    if (shakeSamples.length > SHAKE_SAMPLE_SIZE) {
+      shakeSamples.shift();
+    }
+    
+    // Вычисляем среднее значение из последних образцов
+    const averageDelta = shakeSamples.length > 0 ? 
+      shakeSamples.reduce((a, b) => a + b, 0) / shakeSamples.length : 0;
     
     // Для отладки - выводим в консоль
-    console.log(`[${new Date().toLocaleTimeString()}] acc x:${acceleration.x.toFixed(2)} y:${acceleration.y.toFixed(2)} z:${acceleration.z.toFixed(2)} delta:${totalDelta.toFixed(2)}`);
+    console.log(`Delta: ${totalDelta.toFixed(2)}, Avg: ${averageDelta.toFixed(2)}, Threshold: ${CONFIG.shakeThreshold}`);
     
-    // Проверяем, достаточно ли сильное встряхивание
-    if (totalDelta > CONFIG.shakeThreshold) {
+    // Проверяем условия для встряхивания:
+    // 1. Текущее изменение выше порога
+    // 2. Среднее изменение тоже выше порога (чтобы исключить одиночные скачки)
+    // 3. Телефон не в стабильном положении (величина ускорения не слишком мала)
+    if (totalDelta > CONFIG.shakeThreshold && 
+        averageDelta > CONFIG.shakeThreshold * 0.7 &&
+        currentMagnitude > CONFIG.stabilityThreshold) {
       handleShake();
     }
     
@@ -105,6 +173,8 @@ function startShakeDetection() {
       z: acceleration.z || 0
     };
   });
+  
+  console.log("Детектор встряхивания запущен");
 }
 
 // Обработка встряхивания
@@ -112,7 +182,7 @@ function handleShake() {
   const currentTime = Date.now();
   
   // Проверяем, не слишком ли часто трясём
-  if (currentTime - lastShakeTime < CONFIG.shakeTimeout) {
+  if (currentTime - lastShakeTime < CONFIG.minShakeInterval) {
     return;
   }
   
@@ -121,8 +191,23 @@ function handleShake() {
   
   console.log(`Встряхивание #${shakeCount} обнаружено!`);
   
+  // Визуальная обратная связь
+  flashScreen();
+  
   // Увеличиваем прогресс
   updateProgress(CONFIG.progressPerShake);
+}
+
+// Мигание экрана при встряхивании
+function flashScreen() {
+  gsap.fromTo(document.body,
+    { backgroundColor: 'rgba(255, 255, 0, 0.1)' },
+    { 
+      backgroundColor: 'rgba(255, 255, 0, 0)',
+      duration: 0.3,
+      ease: "power2.out"
+    }
+  );
 }
 
 // Обновление прогресса
@@ -154,14 +239,18 @@ function updateChestImage() {
   if (isOpened) return;
   
   if (progress < CONFIG.minProgressForShaking2) {
-    chest.src = frames[0]; // shaking1.png
-    isShaking = false;
+    if (chest.src !== frames[0]) {
+      chest.src = frames[0]; // shaking1.png
+      isShaking = false;
+    }
   } else if (progress < 100) {
-    chest.src = frames[1]; // shaking2.png
+    if (chest.src !== frames[1]) {
+      chest.src = frames[1]; // shaking2.png
+      isShaking = true;
+    }
     
     // Добавляем анимацию встряхивания только если недавно было встряхивание
-    if (Date.now() - lastShakeTime < 500 && !isShaking) {
-      isShaking = true;
+    if (Date.now() - lastShakeTime < 500) {
       animateShaking();
     }
   }
@@ -221,6 +310,14 @@ function openChest() {
   
   // Показываем сообщение об успехе
   showSuccessMessage();
+  
+  // Останавливаем детектор встряхивания
+  window.removeEventListener('devicemotion', handleDeviceMotion);
+}
+
+// Обработчик для удаления события
+function handleDeviceMotion() {
+  // Пустая функция для удаления события
 }
 
 // Автоматическое уменьшение прогресса
@@ -288,23 +385,6 @@ function showSuccessMessage() {
 function setupClickFallback() {
   console.log("Используется клик-режим для тестирования на ПК");
   
-  let clickCount = 0;
-  document.addEventListener('click', (e) => {
-    if (isOpened) return;
-    
-    clickCount++;
-    console.log(`Клик #${clickCount} (эмуляция встряхивания)`);
-    
-    // Эмулируем встряхивание при клике
-    handleShake();
-    
-    // Визуальная обратная связь
-    gsap.fromTo(document.body,
-      { backgroundColor: '#ffffff' },
-      { backgroundColor: '#f0f0f0', duration: 0.1, yoyo: true, repeat: 1 }
-    );
-  });
-  
   // Добавляем инструкцию
   const instruction = document.createElement('div');
   instruction.innerHTML = `
@@ -325,10 +405,48 @@ function setupClickFallback() {
     </div>
   `;
   document.querySelector('main').appendChild(instruction);
+  
+  // Обработчик кликов для тестирования
+  document.addEventListener('click', handleClickForShake);
 }
 
-// Инициализация при загрузке
-document.addEventListener('DOMContentLoaded', init);
+let clickCount = 0;
+
+function handleClickForShake(e) {
+  if (isOpened) return;
+  
+  // Проверяем, чтобы клик был не на самой инструкции
+  if (e.target.closest('div[style*="bottom: 20px"]')) {
+    return;
+  }
+  
+  clickCount++;
+  console.log(`Клик #${clickCount} (эмуляция встряхивания)`);
+  
+  // Эмулируем встряхивание при клике
+  const currentTime = Date.now();
+  if (currentTime - lastShakeTime < CONFIG.minShakeInterval) {
+    return;
+  }
+  
+  lastShakeTime = currentTime;
+  shakeCount++;
+  
+  // Визуальная обратная связь для клика
+  gsap.fromTo(e.target,
+    { scale: 1 },
+    { 
+      scale: 0.95, 
+      duration: 0.1, 
+      yoyo: true, 
+      repeat: 1,
+      ease: "power2.out"
+    }
+  );
+  
+  // Увеличиваем прогресс
+  updateProgress(CONFIG.progressPerShake);
+}
 
 // Для отладки в консоли
 window.debugProgress = function(amount = 10) {
@@ -341,5 +459,22 @@ window.resetProgress = function() {
   chest.src = frames[0];
   progressBar.style.width = '0%';
   shakeCount = 0;
+  shakeSamples = [];
+  lastAcceleration = null;
   console.log("Прогресс сброшен");
+  
+  // Перезапускаем детектор
+  if (window.DeviceMotionEvent) {
+    startShakeDetection();
+  }
+};
+
+window.getShakeStats = function() {
+  return {
+    progress,
+    shakeCount,
+    lastShakeTime,
+    shakeSamples,
+    isOpened
+  };
 };
