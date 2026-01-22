@@ -80,9 +80,7 @@ main {
 #progress-container p {
   position: absolute;
   top: 0;
-  left: 50%;
   z-index: 25;
-  transform: translateX(-50%);
 }
 
 #progress-bar {
