@@ -849,6 +849,7 @@ window.resetProgress = function () {
   isOpened = false;
   chest.src = frames[0];
   progressBar.style.width = '0%';
+  progressBar.style.height = '100%'; // Восстанавливаем высоту
   shakeCount = 0;
   clickCount = 0;
   shakeSamples = [];
@@ -870,14 +871,28 @@ window.resetProgress = function () {
   const successMsg = document.querySelector('div[style*="background: linear-gradient(135deg, rgba(255, 215, 0, 0.95)"]');
   if (successMsg) successMsg.remove();
   
-  // Восстанавливаем прогресс-бар
+  // Восстанавливаем прогресс-контейнер
   const progressContainer = document.getElementById("progress-container");
   if (progressContainer) {
     progressContainer.style.display = "block";
     progressContainer.style.opacity = "1";
     progressContainer.style.transform = "translateX(-50%) scale(1)";
+    
+    // Восстанавливаем текст
+    const progressText = document.querySelector("#progress-container p");
+    if (progressText) {
+      progressText.style.display = "block";
+      progressText.style.opacity = "1";
+      progressText.style.transform = "translateY(0)";
+    }
   }
 
+  // Скрываем кнопку бонуса
+  const bonusButton = document.getElementById("bonus-button");
+  if (bonusButton) {
+    bonusButton.style.display = "none";
+  }
+  
   // Восстанавливаем анимацию руки
   stopHandAnimation();
   setTimeout(() => {
