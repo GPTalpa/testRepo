@@ -92,6 +92,20 @@ main {
   overflow: hidden;
 }
 
+/* Стили для текста внутри прогресс-бара */
+#progress-bar span {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  color: #fff;
+  font-size: 34px;
+  font-weight: bold;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  white-space: nowrap;
+  pointer-events: none;
+}
 
 /* Стили для активного прогресс-бара (когда он стал кнопкой) */
 #progress-bar.clickable {
