@@ -63,7 +63,10 @@ const CONFIG = {
 let lastProgressTime = Date.now();
 let shakeDurations = [];
 
-// Анимация встряхивания руки
+// ДОБАВЛЕНО: Переменная для управления анимацией плавного движения
+let idleSidewaysAnimation = null;
+
+// Анимация встряхивания руки (интенсивная)
 function animateHandShake() {
   const hand = document.querySelector('.hand');
   if (!hand) return;
@@ -93,11 +96,106 @@ function animateHandShake() {
           x: 0,
           scale: 1,
           duration: 0.2,
-          ease: "elastic.out(1, 0.5)"
+          ease: "elastic.out(1, 0.5)",
+          onComplete: () => {
+            // После тряски возвращаемся к плавному движению
+            if (!isOpened) {
+              startIdleSidewaysAnimation();
+            }
+          }
         });
       }
     }
   );
+}
+
+// ДОБАВЛЕНО: Плавное движение из стороны в сторону (ожидание)
+function startIdleSidewaysAnimation() {
+  const hand = document.querySelector('.hand');
+  if (!hand || isOpened) return;
+
+  // Останавливаем предыдущую анимацию
+  if (idleSidewaysAnimation) {
+    idleSidewaysAnimation.kill();
+  }
+
+  // Плавное движение из стороны в сторону
+  idleSidewaysAnimation = gsap.to(hand, {
+    x: -20, // Движение влево
+    duration: 2.5,
+    ease: "sine.inOut",
+    yoyo: true,
+    repeat: -1,
+    repeatDelay: 0.5,
+    onRepeat: () => {
+      // Случайное изменение скорости и амплитуды для естественности
+      const randomSpeed = 1.8 + Math.random() * 1.5; // 1.8-3.3 секунды
+      const randomAmplitude = 15 + Math.random() * 10; // 15-25 пикселей
+      
+      idleSidewaysAnimation.duration(randomSpeed);
+      idleSidewaysAnimation.vars.x = -randomAmplitude;
+      idleSidewaysAnimation.vars.repeatDelay = 0.3 + Math.random() * 0.7;
+    }
+  });
+}
+
+// ДОБАВЛЕНО: Движение в такт прогрессу (активное состояние)
+function startActiveSidewaysAnimation() {
+  const hand = document.querySelector('.hand');
+  if (!hand || isOpened) return;
+
+  // Останавливаем предыдущую анимацию
+  if (idleSidewaysAnimation) {
+    idleSidewaysAnimation.kill();
+  }
+
+  // Более быстрое движение в такт прогрессу
+  idleSidewaysAnimation = gsap.to(hand, {
+    x: -25, // Большая амплитуда
+    duration: 1.2, // Быстрее
+    ease: "sine.inOut",
+    yoyo: true,
+    repeat: -1,
+    onRepeat: () => {
+      // Случайные вариации для естественности
+      const progressFactor = progress / 100;
+      const speed = 0.8 + (1 - progressFactor) * 0.8; // Ускоряется с прогрессом
+      const amplitude = 20 + progressFactor * 15; // Увеличивается с прогрессом
+      
+      idleSidewaysAnimation.duration(speed);
+      idleSidewaysAnimation.vars.x = -amplitude;
+    }
+  });
+}
+
+// ДОБАВЛЕНО: Предвкушающее движение (когда почти открыли)
+function startAnticipationAnimation() {
+  const hand = document.querySelector('.hand');
+  if (!hand || isOpened) return;
+
+  // Останавливаем предыдущую анимацию
+  if (idleSidewaysAnimation) {
+    idleSidewaysAnimation.kill();
+  }
+
+  // Очень быстрое волнение
+  idleSidewaysAnimation = gsap.to(hand, {
+    x: -30, // Максимальная амплитуда
+    duration: 0.6, // Очень быстро
+    ease: "power2.inOut",
+    yoyo: true,
+    repeat: -1,
+    onRepeat: () => {
+      // Добавляем немного дрожания
+      gsap.to(hand, {
+        rotation: 2,
+        duration: 0.1,
+        yoyo: true,
+        repeat: 1,
+        ease: "power1.inOut"
+      });
+    }
+  });
 }
 
 // Анимация руки при первом появлении
@@ -119,21 +217,29 @@ function animateHandIntro() {
     rotation: 0,
     duration: 0.8,
     ease: "back.out(1.7)",
-    delay: 0.5
+    delay: 0.5,
+    onComplete: () => {
+      // После появления начинаем плавное движение
+      if (!isOpened) {
+        startIdleSidewaysAnimation();
+      }
+    }
   });
 }
 
-// Покачивание руки в ожидании
+// Покачивание руки в ожидании (обновленная)
 function animateHandIdle() {
   const hand = document.querySelector('.hand');
   if (!hand) return;
 
   // Останавливаем предыдущую анимацию ожидания
   gsap.killTweensOf(hand);
-
-  // Мягкое покачивание
+  
+  // Начинаем плавное движение из стороны в сторону
+  startIdleSidewaysAnimation();
+  
+  // Добавляем легкое вертикальное покачивание поверх горизонтального
   gsap.to(hand, {
-    rotation: 3,
     y: 3,
     duration: 1.5,
     repeat: -1,
@@ -142,20 +248,24 @@ function animateHandIdle() {
   });
 }
 
-// Интенсивная анимация при активном тряске
+// Интенсивная анимация при активном тряске (обновленная)
 function animateHandActive() {
   const hand = document.querySelector('.hand');
   if (!hand) return;
 
   gsap.killTweensOf(hand);
-
+  
+  // Более активное движение из стороны в сторону
+  startActiveSidewaysAnimation();
+  
+  // Добавляем больше вращения
   gsap.to(hand, {
     rotation: 8,
     y: 5,
-    duration: 0.3,
+    duration: 0.5,
     repeat: -1,
     yoyo: true,
-    ease: "power1.inOut"
+    ease: "sine.inOut"
   });
 }
 
@@ -165,6 +275,12 @@ function stopHandAnimation() {
   if (!hand) return;
 
   gsap.killTweensOf(hand);
+  
+  // Останавливаем плавное движение
+  if (idleSidewaysAnimation) {
+    idleSidewaysAnimation.kill();
+    idleSidewaysAnimation = null;
+  }
   
   // Плавный возврат к исходному состоянию
   gsap.to(hand, {
@@ -201,7 +317,13 @@ function animateHandHint() {
           rotation: 0,
           x: 0,
           duration: 0.3,
-          ease: "power2.out"
+          ease: "power2.out",
+          onComplete: () => {
+            // Возобновляем плавное движение
+            if (!isOpened) {
+              startIdleSidewaysAnimation();
+            }
+          }
         });
       }
     }
@@ -217,42 +339,66 @@ function updateHandAnimation() {
 
   // Останавливаем предыдущие анимации
   gsap.killTweensOf(hand);
+  
+  if (idleSidewaysAnimation) {
+    idleSidewaysAnimation.kill();
+    idleSidewaysAnimation = null;
+  }
 
   if (progress < 25) {
     // Мало прогресса - показываем подсказку если давно не трясли
     if (Date.now() - lastShakeTime > 3000) {
       animateHandHint();
     } else {
-      animateHandIdle();
+      // Обычное плавное движение
+      startIdleSidewaysAnimation();
+      
+      // Легкое вертикальное покачивание
+      gsap.to(hand, {
+        y: 2,
+        duration: 1.8,
+        repeat: -1,
+        yoyo: true,
+        ease: "sine.inOut"
+      });
     }
   } else if (progress < 50) {
     // Средний прогресс - активная анимация
+    startActiveSidewaysAnimation();
+    
+    // Больше вращения
     gsap.to(hand, {
       rotation: 5,
+      y: 3,
+      duration: 0.8,
+      repeat: -1,
+      yoyo: true,
+      ease: "sine.inOut"
+    });
+  } else if (progress < 75) {
+    // Больше половины - интенсивная анимация
+    startActiveSidewaysAnimation();
+    
+    // Еще больше движения
+    gsap.to(hand, {
+      rotation: 10,
+      y: 8,
       scale: 1.05,
       duration: 0.5,
       repeat: -1,
       yoyo: true,
       ease: "power1.inOut"
     });
-  } else if (progress < 75) {
-    // Больше половины - интенсивная анимация
-    gsap.to(hand, {
-      rotation: 10,
-      y: 8,
-      scale: 1.1,
-      duration: 0.3,
-      repeat: -1,
-      yoyo: true,
-      ease: "power1.inOut"
-    });
   } else {
     // Почти готово - предвкушающая анимация
+    startAnticipationAnimation();
+    
+    // Максимальное волнение
     gsap.to(hand, {
       rotation: 15,
       y: 10,
-      scale: 1.15,
-      duration: 0.2,
+      scale: 1.1,
+      duration: 0.3,
       repeat: -1,
       yoyo: true,
       ease: "power1.inOut"
@@ -267,11 +413,6 @@ function init() {
   
   // Анимация появления руки
   animateHandIntro();
-  
-  // Через секунду начинаем покачивание
-  setTimeout(() => {
-    animateHandIdle();
-  }, 1500);
 
   // Запускаем автоуменьшение прогресса
   startProgressDecay();
@@ -503,23 +644,39 @@ function openChest() {
   const shakeHint = document.getElementById('shake-hint');
   if (shakeHint) shakeHint.remove();
 
-  // Анимация руки при открытии
+  // Анимация руки при открытии - ДОБАВЛЕНО плавное движение
   const hand = document.querySelector('.hand');
   if (hand) {
+    // Сначала торжественное поднятие
     gsap.to(hand, {
       rotation: 25,
       x: 50,
+      y: -20,
       scale: 1.2,
       duration: 0.7,
       ease: "back.out(1.7)",
       onComplete: () => {
+        // Плавное покачивание в победе
         gsap.to(hand, {
-          rotation: 0,
-          x: 0,
-          scale: 1,
-          duration: 1,
-          ease: "elastic.out(1, 0.5)",
-          delay: 0.5
+          rotation: 20,
+          x: 40,
+          y: -15,
+          duration: 0.5,
+          repeat: 3,
+          yoyo: true,
+          ease: "sine.inOut",
+          onComplete: () => {
+            // Возврат в исходное положение с плавным движением
+            gsap.to(hand, {
+              rotation: 0,
+              x: 0,
+              y: 0,
+              scale: 1,
+              duration: 1.2,
+              ease: "elastic.out(1, 0.5)",
+              delay: 0.5
+            });
+          }
         });
       }
     });
@@ -575,6 +732,96 @@ function openChest() {
   showSuccessMessage();
 }
 
+// Показываем сообщение об успехе
+function showSuccessMessage() {
+  const successMessage = document.createElement('div');
+  successMessage.innerHTML = `
+    <div style="
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: linear-gradient(135deg, rgba(255, 215, 0, 0.95), rgba(255, 140, 0, 0.95));
+      color: #000;
+      padding: 30px 40px;
+      border-radius: 20px;
+      text-align: center;
+      font-family: Arial, sans-serif;
+      font-size: 24px;
+      font-weight: bold;
+      z-index: 1000;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+      border: 3px solid #fff;
+    ">
+      🎉 Сундук открыт! 🎉<br>
+      <div style="font-size: 16px; margin-top: 10px; color: #333">
+        Вы потрясли устройство всего ${shakeCount} раз!
+      </div>
+      <div style="font-size: 14px; margin-top: 5px; color: #555">
+        Отличный результат!
+      </div>
+    </div>
+  `;
+  
+  document.querySelector('main').appendChild(successMessage.firstElementChild);
+  
+  gsap.from(successMessage.firstElementChild, {
+    scale: 0,
+    opacity: 0,
+    duration: 0.5,
+    ease: "back.out(1.7)"
+  });
+}
+
+// Показываем подсказку сколько осталось трясок
+function showRemainingShakes() {
+  const remainingShakes = Math.ceil((100 - progress) / CONFIG.progressPerShake);
+  
+  let shakeHint = document.getElementById('shake-hint');
+  
+  if (!shakeHint) {
+    shakeHint = document.createElement('div');
+    shakeHint.id = 'shake-hint';
+    shakeHint.style.cssText = `
+      position: absolute;
+      top: 60px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0, 0, 0, 0.8);
+      color: white;
+      padding: 8px 16px;
+      border-radius: 10px;
+      font-family: Arial, sans-serif;
+      font-size: 14px;
+      text-align: center;
+      z-index: 1000;
+      backdrop-filter: blur(5px);
+      border: 1px solid #ffc700;
+    `;
+    document.querySelector('main').appendChild(shakeHint);
+  }
+  
+  if (remainingShakes > 0 && !isOpened) {
+    shakeHint.textContent = `Осталось трясок: ${remainingShakes}`;
+    shakeHint.style.display = 'block';
+    
+    // Исчезает через 2 секунды
+    setTimeout(() => {
+      if (shakeHint && !isOpened) {
+        gsap.to(shakeHint, {
+          opacity: 0,
+          duration: 0.5,
+          onComplete: () => {
+            if (shakeHint) shakeHint.style.display = 'none';
+          }
+        });
+      }
+    }, 2000);
+  } else if (shakeHint) {
+    shakeHint.remove();
+  }
+}
+
 // Автоматическое уменьшение прогресса
 let decayInterval;
 
@@ -618,7 +865,68 @@ function stopProgressDecay() {
   }
 }
 
+// Альтернатива для тестирования на ПК
+function setupClickFallback() {
+  console.log("Используется клик-режим для тестирования на ПК");
+
+  const instruction = document.createElement('div');
+  instruction.innerHTML = `
+    <div style="
+      position: absolute;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0,0,0,0.7);
+      color: white;
+      padding: 10px 20px;
+      border-radius: 10px;
+      text-align: center;
+      font-family: Arial, sans-serif;
+      z-index: 1000;
+    ">
+      <p>Кликайте по экрану для эмуляции встряхивания</p>
+      <p style="font-size: 12px; margin-top: 5px; color: #ffc700">
+        Цель: 3-5 кликов для открытия сундука
+      </p>
+    </div>
+  `;
+  document.querySelector('main').appendChild(instruction);
+
+  // Обработчик кликов для тестирования
+  document.addEventListener('click', handleClickForShake);
+}
+
 let clickCount = 0;
+
+function handleClickForShake(e) {
+  if (isOpened) return;
+
+  if (e.target.closest('div[style*="bottom: 20px"]')) {
+    return;
+  }
+
+  clickCount++;
+  
+  // Эмулируем handleShake
+  handleShake();
+  
+  // Визуальная обратная связь для клика
+  gsap.fromTo(document.body,
+    { backgroundColor: 'rgba(255, 100, 0, 0.1)' },
+    {
+      backgroundColor: 'rgba(255, 100, 0, 0)',
+      duration: 0.2,
+      ease: "power2.out"
+    }
+  );
+}
+
+// Для отладки в консоли
+window.debugProgress = function (amount = 25) {
+  updateProgress(amount);
+  updateHandAnimation();
+  showRemainingShakes();
+};
 
 window.resetProgress = function () {
   progress = 0;
@@ -632,6 +940,12 @@ window.resetProgress = function () {
   lastAcceleration = null;
   lastProgressTime = Date.now();
   console.log("Прогресс сброшен");
+  
+  // Останавливаем анимацию плавного движения
+  if (idleSidewaysAnimation) {
+    idleSidewaysAnimation.kill();
+    idleSidewaysAnimation = null;
+  }
   
   // Удаляем подсказки
   const shakeHint = document.getElementById('shake-hint');
@@ -651,7 +965,7 @@ window.resetProgress = function () {
   // Восстанавливаем анимацию руки
   stopHandAnimation();
   setTimeout(() => {
-    animateHandIdle();
+    startIdleSidewaysAnimation();
   }, 500);
   
   // Перезапускаем детектор
