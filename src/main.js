@@ -56,6 +56,151 @@ const CONFIG = {
   stabilityThreshold: 2.0     // Порог стабильности (ниже этого - телефон лежит)
 };
 
+// Анимация встряхивания руки
+function animateHandShake() {
+  const hand = document.querySelector('.hand');
+  if (!hand) return;
+
+  // Останавливаем текущую анимацию
+  gsap.killTweensOf(hand);
+
+  // Анимация встряхивания
+  gsap.fromTo(hand,
+    { 
+      rotation: -15,
+      x: -10,
+      scale: 1.05
+    },
+    {
+      rotation: 15,
+      x: 10,
+      scale: 0.95,
+      duration: 0.08,
+      repeat: 5,
+      yoyo: true,
+      ease: "power1.inOut",
+      onComplete: () => {
+        // Возвращаем руку в исходное положение
+        gsap.to(hand, {
+          rotation: 0,
+          x: 0,
+          scale: 1,
+          duration: 0.2,
+          ease: "elastic.out(1, 0.5)"
+        });
+      }
+    }
+  );
+}
+
+// Анимация руки при первом появлении
+function animateHandIntro() {
+  const hand = document.querySelector('.hand');
+  if (!hand) return;
+
+  // Сначала скрываем руку
+  gsap.set(hand, {
+    opacity: 0,
+    x: 100,
+    rotation: -30
+  });
+
+  // Анимация появления
+  gsap.to(hand, {
+    opacity: 1,
+    x: 0,
+    rotation: 0,
+    duration: 0.8,
+    ease: "back.out(1.7)",
+    delay: 0.5
+  });
+}
+
+// Покачивание руки в ожидании
+function animateHandIdle() {
+  const hand = document.querySelector('.hand');
+  if (!hand) return;
+
+  // Останавливаем предыдущую анимацию ожидания
+  gsap.killTweensOf(hand);
+
+  // Мягкое покачивание
+  gsap.to(hand, {
+    rotation: 3,
+    y: 3,
+    duration: 1.5,
+    repeat: -1,
+    yoyo: true,
+    ease: "sine.inOut"
+  });
+}
+
+// Интенсивная анимация при активном тряске
+function animateHandActive() {
+  const hand = document.querySelector('.hand');
+  if (!hand) return;
+
+  gsap.killTweensOf(hand);
+
+  gsap.to(hand, {
+    rotation: 8,
+    y: 5,
+    duration: 0.3,
+    repeat: -1,
+    yoyo: true,
+    ease: "power1.inOut"
+  });
+}
+
+// Остановка анимации руки
+function stopHandAnimation() {
+  const hand = document.querySelector('.hand');
+  if (!hand) return;
+
+  gsap.killTweensOf(hand);
+  
+  // Плавный возврат к исходному состоянию
+  gsap.to(hand, {
+    rotation: 0,
+    x: 0,
+    y: 0,
+    scale: 1,
+    duration: 0.5,
+    ease: "elastic.out(1, 0.5)"
+  });
+}
+
+// Анимация "совета" - подсказка трясти
+function animateHandHint() {
+  const hand = document.querySelector('.hand');
+  if (!hand) return;
+
+  // Сильная анимация для привлечения внимания
+  gsap.fromTo(hand,
+    { 
+      rotation: -20,
+      x: -30
+    },
+    {
+      rotation: 20,
+      x: 30,
+      duration: 0.5,
+      repeat: 1,
+      yoyo: true,
+      ease: "power2.inOut",
+      onComplete: () => {
+        // Возвращаем к легкому покачиванию
+        gsap.to(hand, {
+          rotation: 0,
+          x: 0,
+          duration: 0.3,
+          ease: "power2.out"
+        });
+      }
+    }
+  );
+}
+
 // Инициализация
 function init() {
   chest.src = frames[0];

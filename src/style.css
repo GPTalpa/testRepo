@@ -26,6 +26,8 @@ main {
   position: absolute;
   top: 140px;
   right: 0;
+  transform-origin: left center; /* Точка вращения - левая сторона */
+  will-change: transform; /* Оптимизация для анимации */
 }
 
 .content {
