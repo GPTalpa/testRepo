@@ -710,63 +710,101 @@ function openChest() {
     }
   );
 
-  // ОСНОВНОЕ ИЗМЕНЕНИЕ: Анимация преобразования прогресс-бара в кнопку
-  const progressContainer = document.getElementById("progress-container");
+  // Упрощенная анимация: просто меняем прогресс-бар на кнопку
   const progressBar = document.getElementById("progress-bar");
-  const bonusButton = document.getElementById("bonus-button");
-
-  // Сначала анимируем исчезновение текста "get a bonus"
+  
+  // Сначала анимируем исчезновение верхнего текста
   gsap.to("#progress-container p", {
     opacity: 0,
-    y: -20,
+    y: -10,
     duration: 0.3,
-    ease: "power2.out",
-    onComplete: function() {
-      // Прячем текст полностью
-      document.querySelector("#progress-container p").style.display = "none";
-    }
+    ease: "power2.out"
   });
 
-  // Затем анимируем прогресс-бар, чтобы он превратился в кнопку
+  // Затем расширяем прогресс-бар до 100% (если еще не на 100%)
   gsap.to(progressBar, {
     width: "100%",
-    height: "60px",
-    duration: 0.7,
-    ease: "back.out(1.2)",
+    duration: 0.5,
+    ease: "power2.out",
     onComplete: function() {
-      // Прячем прогресс-контейнер
-      gsap.to(progressContainer, {
-        opacity: 0,
-        scale: 0.8,
-        duration: 0.3,
+      // Добавляем текст в прогресс-бар
+      progressBar.innerHTML = '<span>GET YOUR BONUS</span>';
+      
+      // Стилизуем текст
+      const span = progressBar.querySelector('span');
+      span.style.cssText = `
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        color: #000;
+        font-size: 18px;
+        font-weight: bold;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        white-space: nowrap;
+        opacity: 0;
+      `;
+      
+      // Анимация появления текста
+      gsap.to(span, {
+        opacity: 1,
+        duration: 0.5,
         ease: "power2.out",
-        onComplete: function() {
-          progressContainer.style.display = "none";
-          
-          // Показываем кнопку с анимацией
-          bonusButton.style.display = "block";
-          gsap.fromTo(bonusButton,
-            {
-              opacity: 0,
-              scale: 0.8,
-              y: 20
-            },
-            {
-              opacity: 1,
-              scale: 1,
-              y: 0,
-              duration: 0.5,
-              ease: "back.out(1.7)",
-              delay: 0.2
-            }
-          );
-        }
+        delay: 0.2
       });
+      
+      // Делаем прогресс-бар кликабельным
+      progressBar.style.cursor = "pointer";
+      progressBar.style.pointerEvents = "auto";
+      
+      // Добавляем обработчик клика
+      progressBar.addEventListener('click', handleBonusClick);
     }
   });
 
   // Отключаем автоуменьшение прогресса
   stopProgressDecay();
+}
+
+// Обработчик клика по бонусу
+function handleBonusClick() {
+  console.log("Бонус получен!");
+  
+  // Анимация нажатия
+  gsap.to(this, {
+    scale: 0.95,
+    duration: 0.1,
+    yoyo: true,
+    repeat: 1,
+    ease: "power1.inOut",
+    onComplete: () => {
+      // Меняем текст
+      const span = this.querySelector('span');
+      if (span) {
+        span.textContent = "BONUS CLAIMED!";
+        gsap.to(this, {
+          background: "linear-gradient(90deg, #4CAF50, #45a049)",
+          duration: 0.3,
+          ease: "power2.out"
+        });
+      }
+      
+      // Вибрация
+      if (navigator.vibrate) {
+        navigator.vibrate([50, 30, 50]);
+      }
+      
+      // Убираем кликабельность
+      this.style.cursor = "default";
+      this.style.pointerEvents = "none";
+      
+      // Через 2 секунды сбрасываем игру
+      setTimeout(() => {
+        resetProgress();
+      }, 2000);
+    }
+  });
 }
 
 // Автоматическое уменьшение прогресса
