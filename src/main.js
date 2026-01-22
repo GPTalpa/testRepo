@@ -616,55 +616,6 @@ function showSuccessMessage() {
   });
 }
 
-// Показываем подсказку сколько осталось трясок
-function showRemainingShakes() {
-  const remainingShakes = Math.ceil((100 - progress) / CONFIG.progressPerShake);
-  
-  let shakeHint = document.getElementById('shake-hint');
-  
-  if (!shakeHint) {
-    shakeHint = document.createElement('div');
-    shakeHint.id = 'shake-hint';
-    shakeHint.style.cssText = `
-      position: absolute;
-      top: 60px;
-      left: 50%;
-      transform: translateX(-50%);
-      background: rgba(0, 0, 0, 0.8);
-      color: white;
-      padding: 8px 16px;
-      border-radius: 10px;
-      font-family: Arial, sans-serif;
-      font-size: 14px;
-      text-align: center;
-      z-index: 1000;
-      backdrop-filter: blur(5px);
-      border: 1px solid #ffc700;
-    `;
-    document.querySelector('main').appendChild(shakeHint);
-  }
-  
-  if (remainingShakes > 0 && !isOpened) {
-    shakeHint.textContent = `Осталось трясок: ${remainingShakes}`;
-    shakeHint.style.display = 'block';
-    
-    // Исчезает через 2 секунды
-    setTimeout(() => {
-      if (shakeHint && !isOpened) {
-        gsap.to(shakeHint, {
-          opacity: 0,
-          duration: 0.5,
-          onComplete: () => {
-            if (shakeHint) shakeHint.style.display = 'none';
-          }
-        });
-      }
-    }, 2000);
-  } else if (shakeHint) {
-    shakeHint.remove();
-  }
-}
-
 // Автоматическое уменьшение прогресса
 let decayInterval;
 
