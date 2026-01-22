@@ -732,96 +732,6 @@ function openChest() {
   showSuccessMessage();
 }
 
-// Показываем сообщение об успехе
-function showSuccessMessage() {
-  const successMessage = document.createElement('div');
-  successMessage.innerHTML = `
-    <div style="
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      background: linear-gradient(135deg, rgba(255, 215, 0, 0.95), rgba(255, 140, 0, 0.95));
-      color: #000;
-      padding: 30px 40px;
-      border-radius: 20px;
-      text-align: center;
-      font-family: Arial, sans-serif;
-      font-size: 24px;
-      font-weight: bold;
-      z-index: 1000;
-      box-shadow: 0 10px 30px rgba(0,0,0,0.3);
-      border: 3px solid #fff;
-    ">
-      🎉 Сундук открыт! 🎉<br>
-      <div style="font-size: 16px; margin-top: 10px; color: #333">
-        Вы потрясли устройство всего ${shakeCount} раз!
-      </div>
-      <div style="font-size: 14px; margin-top: 5px; color: #555">
-        Отличный результат!
-      </div>
-    </div>
-  `;
-  
-  document.querySelector('main').appendChild(successMessage.firstElementChild);
-  
-  gsap.from(successMessage.firstElementChild, {
-    scale: 0,
-    opacity: 0,
-    duration: 0.5,
-    ease: "back.out(1.7)"
-  });
-}
-
-// Показываем подсказку сколько осталось трясок
-function showRemainingShakes() {
-  const remainingShakes = Math.ceil((100 - progress) / CONFIG.progressPerShake);
-  
-  let shakeHint = document.getElementById('shake-hint');
-  
-  if (!shakeHint) {
-    shakeHint = document.createElement('div');
-    shakeHint.id = 'shake-hint';
-    shakeHint.style.cssText = `
-      position: absolute;
-      top: 60px;
-      left: 50%;
-      transform: translateX(-50%);
-      background: rgba(0, 0, 0, 0.8);
-      color: white;
-      padding: 8px 16px;
-      border-radius: 10px;
-      font-family: Arial, sans-serif;
-      font-size: 14px;
-      text-align: center;
-      z-index: 1000;
-      backdrop-filter: blur(5px);
-      border: 1px solid #ffc700;
-    `;
-    document.querySelector('main').appendChild(shakeHint);
-  }
-  
-  if (remainingShakes > 0 && !isOpened) {
-    shakeHint.textContent = `Осталось трясок: ${remainingShakes}`;
-    shakeHint.style.display = 'block';
-    
-    // Исчезает через 2 секунды
-    setTimeout(() => {
-      if (shakeHint && !isOpened) {
-        gsap.to(shakeHint, {
-          opacity: 0,
-          duration: 0.5,
-          onComplete: () => {
-            if (shakeHint) shakeHint.style.display = 'none';
-          }
-        });
-      }
-    }, 2000);
-  } else if (shakeHint) {
-    shakeHint.remove();
-  }
-}
-
 // Автоматическое уменьшение прогресса
 let decayInterval;
 
@@ -863,37 +773,6 @@ function stopProgressDecay() {
   if (decayInterval) {
     clearInterval(decayInterval);
   }
-}
-
-// Альтернатива для тестирования на ПК
-function setupClickFallback() {
-  console.log("Используется клик-режим для тестирования на ПК");
-
-  const instruction = document.createElement('div');
-  instruction.innerHTML = `
-    <div style="
-      position: absolute;
-      bottom: 20px;
-      left: 50%;
-      transform: translateX(-50%);
-      background: rgba(0,0,0,0.7);
-      color: white;
-      padding: 10px 20px;
-      border-radius: 10px;
-      text-align: center;
-      font-family: Arial, sans-serif;
-      z-index: 1000;
-    ">
-      <p>Кликайте по экрану для эмуляции встряхивания</p>
-      <p style="font-size: 12px; margin-top: 5px; color: #ffc700">
-        Цель: 3-5 кликов для открытия сундука
-      </p>
-    </div>
-  `;
-  document.querySelector('main').appendChild(instruction);
-
-  // Обработчик кликов для тестирования
-  document.addEventListener('click', handleClickForShake);
 }
 
 let clickCount = 0;
