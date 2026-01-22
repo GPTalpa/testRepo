@@ -44,17 +44,24 @@ let shakeCount = 0;
 let shakeSamples = [];
 const SHAKE_SAMPLE_SIZE = 5;
 
-// Конфигурация
+// Конфигурация - ОСНОВНЫЕ ИЗМЕНЕНИЯ ДЛЯ 3-5 ТРЯСОК
 const CONFIG = {
   shakeThreshold: 15,   // УВЕЛИЧИЛИ порог силы встряхивания
   shakeTimeout: 500,    // Время между встряхиваниями (мс)
-  progressPerShake: 3,  // УМЕНЬШИЛИ прогресс за одно встряхивание
-  decayRate: 0.2,       // Скорость уменьшения прогресса (% в секунду)
-  minProgressForShaking2: 30, // Минимальный прогресс для показа shaking2.png
-  minShakeInterval: 250,      // Минимальный интервал между встряхиваниями
+  progressPerShake: 25, // УВЕЛИЧИЛИ для 4 трясок (100/4 = 25)
+  decayRate: 1.5,       // УВЕЛИЧИЛИ скорость уменьшения прогресса
+  minProgressForShaking2: 25, // УМЕНЬШИЛИ минимальный прогресс для shaking2.png
+  minShakeInterval: 200,      // Минимальный интервал между встряхиваниями
   maxShakeSamples: 10,        // Максимальное количество образцов для усреднения
-  stabilityThreshold: 2.0     // Порог стабильности (ниже этого - телефон лежит)
+  stabilityThreshold: 2.0,    // Порог стабильности
+  targetShakes: 4,            // Целевое количество трясок
+  progressDecayDelay: 2000,   // Задержка перед началом уменьшения прогресса (2 сек)
+  timeBetweenShakes: 500      // Максимальное время между трясками для сохранения прогресса
 };
+
+// Счетчик для отслеживания времени без тряски
+let lastProgressTime = Date.now();
+let shakeDurations = [];
 
 // Анимация встряхивания руки
 function animateHandShake() {
@@ -201,10 +208,70 @@ function animateHandHint() {
   );
 }
 
+// Обновление анимации руки в зависимости от прогресса
+function updateHandAnimation() {
+  if (isOpened) return;
+
+  const hand = document.querySelector('.hand');
+  if (!hand) return;
+
+  // Останавливаем предыдущие анимации
+  gsap.killTweensOf(hand);
+
+  if (progress < 25) {
+    // Мало прогресса - показываем подсказку если давно не трясли
+    if (Date.now() - lastShakeTime > 3000) {
+      animateHandHint();
+    } else {
+      animateHandIdle();
+    }
+  } else if (progress < 50) {
+    // Средний прогресс - активная анимация
+    gsap.to(hand, {
+      rotation: 5,
+      scale: 1.05,
+      duration: 0.5,
+      repeat: -1,
+      yoyo: true,
+      ease: "power1.inOut"
+    });
+  } else if (progress < 75) {
+    // Больше половины - интенсивная анимация
+    gsap.to(hand, {
+      rotation: 10,
+      y: 8,
+      scale: 1.1,
+      duration: 0.3,
+      repeat: -1,
+      yoyo: true,
+      ease: "power1.inOut"
+    });
+  } else {
+    // Почти готово - предвкушающая анимация
+    gsap.to(hand, {
+      rotation: 15,
+      y: 10,
+      scale: 1.15,
+      duration: 0.2,
+      repeat: -1,
+      yoyo: true,
+      ease: "power1.inOut"
+    });
+  }
+}
+
 // Инициализация
 function init() {
   chest.src = frames[0];
   progressBar.style.width = "0%";
+  
+  // Анимация появления руки
+  animateHandIntro();
+  
+  // Через секунду начинаем покачивание
+  setTimeout(() => {
+    animateHandIdle();
+  }, 1500);
 
   // Запускаем автоуменьшение прогресса
   startProgressDecay();
@@ -218,9 +285,8 @@ function init() {
   }
 }
 
-// Запрос разрешения на доступ к акселерометру (особенно важно для iOS)
+// Запрос разрешения на доступ к акселерометру
 async function requestMotionPermission() {
-  // Проверяем, нужны ли разрешения (iOS 13+)
   if (typeof DeviceMotionEvent !== 'undefined' &&
     typeof DeviceMotionEvent.requestPermission === 'function') {
     try {
@@ -237,7 +303,6 @@ async function requestMotionPermission() {
       setupClickFallback();
     }
   } else {
-    // Для Android и других браузеров
     startShakeDetection();
   }
 }
@@ -245,7 +310,7 @@ async function requestMotionPermission() {
 // Улучшенный детектор встряхивания
 function startShakeDetection() {
   let lastUpdate = 0;
-  const updateInterval = 100; // Проверяем каждые 100мс
+  const updateInterval = 100;
 
   window.addEventListener('devicemotion', (event) => {
     const now = Date.now();
@@ -256,12 +321,10 @@ function startShakeDetection() {
       event.acceleration ||
       { x: 0, y: 0, z: 0 };
 
-    // Пропускаем, если данные неполные
     if (acceleration.x === null || acceleration.y === null || acceleration.z === null) {
       return;
     }
 
-    // Инициализируем lastAcceleration при первом вызове
     if (!lastAcceleration) {
       lastAcceleration = {
         x: acceleration.x || 0,
@@ -271,47 +334,33 @@ function startShakeDetection() {
       return;
     }
 
-    // Рассчитываем изменение ускорения
     const delta = {
       x: Math.abs(acceleration.x - lastAcceleration.x),
       y: Math.abs(acceleration.y - lastAcceleration.y),
       z: Math.abs(acceleration.z - lastAcceleration.z)
     };
 
-    // Векторная норма изменения ускорения (более точная, чем сумма)
     const totalDelta = Math.sqrt(delta.x * delta.x + delta.y * delta.y + delta.z * delta.z);
-
-    // Норма текущего ускорения (для фильтрации стабильных состояний)
     const currentMagnitude = Math.sqrt(
       acceleration.x * acceleration.x +
       acceleration.y * acceleration.y +
       acceleration.z * acceleration.z
     );
 
-    // Добавляем образец в историю
     shakeSamples.push(totalDelta);
     if (shakeSamples.length > SHAKE_SAMPLE_SIZE) {
       shakeSamples.shift();
     }
 
-    // Вычисляем среднее значение из последних образцов
     const averageDelta = shakeSamples.length > 0 ?
       shakeSamples.reduce((a, b) => a + b, 0) / shakeSamples.length : 0;
 
-    // Для отладки - выводим в консоль
-    console.log(`Delta: ${totalDelta.toFixed(2)}, Avg: ${averageDelta.toFixed(2)}, Threshold: ${CONFIG.shakeThreshold}`);
-
-    // Проверяем условия для встряхивания:
-    // 1. Текущее изменение выше порога
-    // 2. Среднее изменение тоже выше порога (чтобы исключить одиночные скачки)
-    // 3. Телефон не в стабильном положении (величина ускорения не слишком мала)
     if (totalDelta > CONFIG.shakeThreshold &&
       averageDelta > CONFIG.shakeThreshold * 0.7 &&
       currentMagnitude > CONFIG.stabilityThreshold) {
       handleShake();
     }
 
-    // Сохраняем текущие значения для следующего сравнения
     lastAcceleration = {
       x: acceleration.x || 0,
       y: acceleration.y || 0,
@@ -326,21 +375,39 @@ function startShakeDetection() {
 function handleShake() {
   const currentTime = Date.now();
 
-  // Проверяем, не слишком ли часто трясём
   if (currentTime - lastShakeTime < CONFIG.minShakeInterval) {
     return;
   }
 
+  // Сохраняем время между трясками
+  if (lastShakeTime > 0) {
+    const duration = currentTime - lastShakeTime;
+    shakeDurations.push(duration);
+    if (shakeDurations.length > 5) {
+      shakeDurations.shift();
+    }
+  }
+
   lastShakeTime = currentTime;
+  lastProgressTime = currentTime; // Сбрасываем таймер уменьшения
   shakeCount++;
 
-  console.log(`Встряхивание #${shakeCount} обнаружено!`);
+  console.log(`Встряхивание #${shakeCount} обнаружено! Прогресс: ${progress + CONFIG.progressPerShake}%`);
 
   // Визуальная обратная связь
   flashScreen();
+  
+  // Анимация руки
+  animateHandShake();
 
   // Увеличиваем прогресс
   updateProgress(CONFIG.progressPerShake);
+  
+  // Обновляем анимацию руки
+  updateHandAnimation();
+
+  // Показываем подсказку сколько осталось
+  showRemainingShakes();
 }
 
 // Мигание экрана при встряхивании
@@ -359,8 +426,8 @@ function flashScreen() {
 function updateProgress(increment) {
   if (isOpened) return;
 
-  const oldProgress = progress;
   progress = Math.min(progress + increment, 100);
+  lastProgressTime = Date.now();
 
   // Анимация прогресс-бара
   gsap.to(progressBar, {
@@ -368,7 +435,6 @@ function updateProgress(increment) {
     duration: 0.3,
     ease: "power2.out",
     onUpdate: function () {
-      // Обновляем картинку сундука в зависимости от прогресса
       updateChestImage();
     }
   });
@@ -385,16 +451,15 @@ function updateChestImage() {
 
   if (progress < CONFIG.minProgressForShaking2) {
     if (chest.src !== frames[0]) {
-      chest.src = frames[0]; // shaking1.png
+      chest.src = frames[0];
       isShaking = false;
     }
   } else if (progress < 100) {
     if (chest.src !== frames[1]) {
-      chest.src = frames[1]; // shaking2.png
+      chest.src = frames[1];
       isShaking = true;
     }
 
-    // Добавляем анимацию встряхивания только если недавно было встряхивание
     if (Date.now() - lastShakeTime < 500) {
       animateShaking();
     }
@@ -427,23 +492,52 @@ function animateShaking() {
 // Открытие сундука
 function openChest() {
   isOpened = true;
-  chest.src = frames[2]; // shaking3.png
+  chest.src = frames[2];
 
-  console.log("Сундук открыт!");
+  console.log(`Сундук открыт! Потребовалось ${shakeCount} встряхиваний`);
 
-  // Дополнительная анимация прогресс-бара перед исчезновением
+  // Останавливаем анимации руки
+  stopHandAnimation();
+  
+  // Удаляем подсказку оставшихся трясок
+  const shakeHint = document.getElementById('shake-hint');
+  if (shakeHint) shakeHint.remove();
+
+  // Анимация руки при открытии
+  const hand = document.querySelector('.hand');
+  if (hand) {
+    gsap.to(hand, {
+      rotation: 25,
+      x: 50,
+      scale: 1.2,
+      duration: 0.7,
+      ease: "back.out(1.7)",
+      onComplete: () => {
+        gsap.to(hand, {
+          rotation: 0,
+          x: 0,
+          scale: 1,
+          duration: 1,
+          ease: "elastic.out(1, 0.5)",
+          delay: 0.5
+        });
+      }
+    });
+  }
+
+  // Анимация прогресс-бара
   gsap.to("#progress-bar", {
     background: "linear-gradient(90deg, #FFD700, #FF8C00, #FF4500)",
     duration: 0.3,
     ease: "power2.out"
   });
 
-  // Вибрация на мобильных устройствах (если поддерживается)
+  // Вибрация
   if (navigator.vibrate) {
-    navigator.vibrate([100, 50, 100]);
+    navigator.vibrate([100, 50, 100, 50, 100]);
   }
 
-  // Анимация открытия
+  // Анимация открытия сундука
   gsap.to(chest, {
     scale: 1.15,
     duration: 0.5,
@@ -462,15 +556,14 @@ function openChest() {
     }
   );
 
-  // ДОБАВИТЬ ЭТОТ КОД - анимация исчезновения прогресс-бара
+  // Анимация исчезновения прогресс-бара
   gsap.to("#progress-container", {
     opacity: 0,
     scale: 0.8,
     duration: 0.7,
     ease: "power2.inOut",
-    delay: 0.3, // небольшая задержка перед началом анимации
+    delay: 0.3,
     onComplete: function () {
-      // После завершения анимации скрываем элемент
       document.getElementById("progress-container").style.display = "none";
     }
   });
@@ -505,14 +598,16 @@ function showSuccessMessage() {
     ">
       🎉 Сундук открыт! 🎉<br>
       <div style="font-size: 16px; margin-top: 10px; color: #333">
-        Вы потрясли устройство ${shakeCount} раз!
+        Вы потрясли устройство всего ${shakeCount} раз!
+      </div>
+      <div style="font-size: 14px; margin-top: 5px; color: #555">
+        Отличный результат!
       </div>
     </div>
   `;
   
   document.querySelector('main').appendChild(successMessage.firstElementChild);
   
-  // Анимация появления
   gsap.from(successMessage.firstElementChild, {
     scale: 0,
     opacity: 0,
@@ -521,27 +616,88 @@ function showSuccessMessage() {
   });
 }
 
+// Показываем подсказку сколько осталось трясок
+function showRemainingShakes() {
+  const remainingShakes = Math.ceil((100 - progress) / CONFIG.progressPerShake);
+  
+  let shakeHint = document.getElementById('shake-hint');
+  
+  if (!shakeHint) {
+    shakeHint = document.createElement('div');
+    shakeHint.id = 'shake-hint';
+    shakeHint.style.cssText = `
+      position: absolute;
+      top: 60px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0, 0, 0, 0.8);
+      color: white;
+      padding: 8px 16px;
+      border-radius: 10px;
+      font-family: Arial, sans-serif;
+      font-size: 14px;
+      text-align: center;
+      z-index: 1000;
+      backdrop-filter: blur(5px);
+      border: 1px solid #ffc700;
+    `;
+    document.querySelector('main').appendChild(shakeHint);
+  }
+  
+  if (remainingShakes > 0 && !isOpened) {
+    shakeHint.textContent = `Осталось трясок: ${remainingShakes}`;
+    shakeHint.style.display = 'block';
+    
+    // Исчезает через 2 секунды
+    setTimeout(() => {
+      if (shakeHint && !isOpened) {
+        gsap.to(shakeHint, {
+          opacity: 0,
+          duration: 0.5,
+          onComplete: () => {
+            if (shakeHint) shakeHint.style.display = 'none';
+          }
+        });
+      }
+    }, 2000);
+  } else if (shakeHint) {
+    shakeHint.remove();
+  }
+}
+
 // Автоматическое уменьшение прогресса
 let decayInterval;
 
 function startProgressDecay() {
   decayInterval = setInterval(() => {
     if (progress > 0 && !isOpened) {
-      const oldProgress = progress;
-      progress = Math.max(progress - CONFIG.decayRate, 0);
+      const currentTime = Date.now();
+      const timeSinceLastProgress = currentTime - lastProgressTime;
+      
+      // Начинаем уменьшать прогресс только если прошло больше 2 секунд без тряски
+      if (timeSinceLastProgress > CONFIG.progressDecayDelay) {
+        const oldProgress = progress;
+        progress = Math.max(progress - CONFIG.decayRate, 0);
 
-      gsap.to(progressBar, {
-        width: `${progress}%`,
-        duration: 0.5,
-        ease: "power1.out",
-        onUpdate: () => {
-          // Если прогресс упал ниже порога, возвращаем первую картинку
-          if (progress < CONFIG.minProgressForShaking2 && oldProgress >= CONFIG.minProgressForShaking2) {
-            chest.src = frames[0];
-            isShaking = false;
+        gsap.to(progressBar, {
+          width: `${progress}%`,
+          duration: 0.5,
+          ease: "power1.out",
+          onUpdate: () => {
+            if (progress < CONFIG.minProgressForShaking2 && oldProgress >= CONFIG.minProgressForShaking2) {
+              chest.src = frames[0];
+              isShaking = false;
+              updateHandAnimation();
+            }
           }
+        });
+        
+        // Если прогресс упал до 0, сбрасываем счетчик трясок
+        if (progress === 0) {
+          shakeCount = 0;
+          shakeDurations = [];
         }
-      });
+      }
     }
   }, 1000);
 }
@@ -556,7 +712,6 @@ function stopProgressDecay() {
 function setupClickFallback() {
   console.log("Используется клик-режим для тестирования на ПК");
 
-  // Добавляем инструкцию
   const instruction = document.createElement('div');
   instruction.innerHTML = `
     <div style="
@@ -572,7 +727,10 @@ function setupClickFallback() {
       font-family: Arial, sans-serif;
       z-index: 1000;
     ">
-      <p>Для тестирования: кликайте по экрану (на мобильном - встряхивайте устройство)</p>
+      <p>Кликайте по экрану для эмуляции встряхивания</p>
+      <p style="font-size: 12px; margin-top: 5px; color: #ffc700">
+        Цель: 3-5 кликов для открытия сундука
+      </p>
     </div>
   `;
   document.querySelector('main').appendChild(instruction);
@@ -586,42 +744,31 @@ let clickCount = 0;
 function handleClickForShake(e) {
   if (isOpened) return;
 
-  // Проверяем, чтобы клик был не на самой инструкции
   if (e.target.closest('div[style*="bottom: 20px"]')) {
     return;
   }
 
   clickCount++;
-  console.log(`Клик #${clickCount} (эмуляция встряхивания)`);
-
-  // Эмулируем встряхивание при клике
-  const currentTime = Date.now();
-  if (currentTime - lastShakeTime < CONFIG.minShakeInterval) {
-    return;
-  }
-
-  lastShakeTime = currentTime;
-  shakeCount++;
-
+  
+  // Эмулируем handleShake
+  handleShake();
+  
   // Визуальная обратная связь для клика
-  gsap.fromTo(e.target,
-    { scale: 1 },
+  gsap.fromTo(document.body,
+    { backgroundColor: 'rgba(255, 100, 0, 0.1)' },
     {
-      scale: 0.95,
-      duration: 0.1,
-      yoyo: true,
-      repeat: 1,
+      backgroundColor: 'rgba(255, 100, 0, 0)',
+      duration: 0.2,
       ease: "power2.out"
     }
   );
-
-  // Увеличиваем прогресс
-  updateProgress(CONFIG.progressPerShake);
 }
 
 // Для отладки в консоли
-window.debugProgress = function (amount = 10) {
+window.debugProgress = function (amount = 25) {
   updateProgress(amount);
+  updateHandAnimation();
+  showRemainingShakes();
 };
 
 window.resetProgress = function () {
@@ -630,11 +777,21 @@ window.resetProgress = function () {
   chest.src = frames[0];
   progressBar.style.width = '0%';
   shakeCount = 0;
+  clickCount = 0;
   shakeSamples = [];
+  shakeDurations = [];
   lastAcceleration = null;
+  lastProgressTime = Date.now();
   console.log("Прогресс сброшен");
   
-  // Показываем прогресс-бар снова
+  // Удаляем подсказки
+  const shakeHint = document.getElementById('shake-hint');
+  if (shakeHint) shakeHint.remove();
+  
+  const successMsg = document.querySelector('div[style*="background: linear-gradient(135deg, rgba(255, 215, 0, 0.95)"]');
+  if (successMsg) successMsg.remove();
+  
+  // Восстанавливаем прогресс-бар
   const progressContainer = document.getElementById("progress-container");
   if (progressContainer) {
     progressContainer.style.display = "block";
@@ -642,6 +799,12 @@ window.resetProgress = function () {
     progressContainer.style.transform = "translateX(-50%) scale(1)";
   }
 
+  // Восстанавливаем анимацию руки
+  stopHandAnimation();
+  setTimeout(() => {
+    animateHandIdle();
+  }, 500);
+  
   // Перезапускаем детектор
   if (window.DeviceMotionEvent) {
     startShakeDetection();
@@ -652,11 +815,22 @@ window.resetProgress = function () {
 };
 
 window.getShakeStats = function () {
+  const remainingShakes = Math.ceil((100 - progress) / CONFIG.progressPerShake);
   return {
     progress,
     shakeCount,
+    remainingShakes,
     lastShakeTime,
     shakeSamples,
-    isOpened
+    isOpened,
+    requiredShakes: CONFIG.targetShakes,
+    progressPerShake: CONFIG.progressPerShake
   };
 };
+
+// Показываем подсказку при старте
+setTimeout(() => {
+  if (progress === 0 && !isOpened) {
+    showRemainingShakes();
+  }
+}, 2000);
