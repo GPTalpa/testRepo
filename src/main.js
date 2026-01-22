@@ -708,68 +708,7 @@ function stopProgressDecay() {
   }
 }
 
-// Альтернатива для тестирования на ПК
-function setupClickFallback() {
-  console.log("Используется клик-режим для тестирования на ПК");
-
-  const instruction = document.createElement('div');
-  instruction.innerHTML = `
-    <div style="
-      position: absolute;
-      bottom: 20px;
-      left: 50%;
-      transform: translateX(-50%);
-      background: rgba(0,0,0,0.7);
-      color: white;
-      padding: 10px 20px;
-      border-radius: 10px;
-      text-align: center;
-      font-family: Arial, sans-serif;
-      z-index: 1000;
-    ">
-      <p>Кликайте по экрану для эмуляции встряхивания</p>
-      <p style="font-size: 12px; margin-top: 5px; color: #ffc700">
-        Цель: 3-5 кликов для открытия сундука
-      </p>
-    </div>
-  `;
-  document.querySelector('main').appendChild(instruction);
-
-  // Обработчик кликов для тестирования
-  document.addEventListener('click', handleClickForShake);
-}
-
 let clickCount = 0;
-
-function handleClickForShake(e) {
-  if (isOpened) return;
-
-  if (e.target.closest('div[style*="bottom: 20px"]')) {
-    return;
-  }
-
-  clickCount++;
-  
-  // Эмулируем handleShake
-  handleShake();
-  
-  // Визуальная обратная связь для клика
-  gsap.fromTo(document.body,
-    { backgroundColor: 'rgba(255, 100, 0, 0.1)' },
-    {
-      backgroundColor: 'rgba(255, 100, 0, 0)',
-      duration: 0.2,
-      ease: "power2.out"
-    }
-  );
-}
-
-// Для отладки в консоли
-window.debugProgress = function (amount = 25) {
-  updateProgress(amount);
-  updateHandAnimation();
-  showRemainingShakes();
-};
 
 window.resetProgress = function () {
   progress = 0;
