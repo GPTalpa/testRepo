@@ -77,6 +77,13 @@ main {
   background-color: rgba(17, 17, 20, 0.349); /* Альфа-канал в rgba */
 }
 
+#progress-container p {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
 #progress-bar {
   width: 0%;
   height: 100%;
