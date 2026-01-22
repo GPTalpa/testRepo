@@ -48,10 +48,10 @@ const SHAKE_SAMPLE_SIZE = 5;
 const CONFIG = {
   shakeThreshold: 15,   // УВЕЛИЧИЛИ порог силы встряхивания
   shakeTimeout: 500,    // Время между встряхиваниями (мс)
-  progressPerShake: 5,  // УМЕНЬШИЛИ прогресс за одно встряхивание
-  decayRate: 0.5,       // Скорость уменьшения прогресса (% в секунду)
+  progressPerShake: 3,  // УМЕНЬШИЛИ прогресс за одно встряхивание
+  decayRate: 0.2,       // Скорость уменьшения прогресса (% в секунду)
   minProgressForShaking2: 30, // Минимальный прогресс для показа shaking2.png
-  minShakeInterval: 300,      // Минимальный интервал между встряхиваниями
+  minShakeInterval: 250,      // Минимальный интервал между встряхиваниями
   maxShakeSamples: 10,        // Максимальное количество образцов для усреднения
   stabilityThreshold: 2.0     // Порог стабильности (ниже этого - телефон лежит)
 };
@@ -337,9 +337,43 @@ function openChest() {
   showSuccessMessage();
 }
 
-// Обработчик для удаления события
-function handleDeviceMotion() {
-  // Пустая функция для удаления события
+// Показываем сообщение об успехе
+function showSuccessMessage() {
+  const successMessage = document.createElement('div');
+  successMessage.innerHTML = `
+    <div style="
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: linear-gradient(135deg, rgba(255, 215, 0, 0.95), rgba(255, 140, 0, 0.95));
+      color: #000;
+      padding: 30px 40px;
+      border-radius: 20px;
+      text-align: center;
+      font-family: Arial, sans-serif;
+      font-size: 24px;
+      font-weight: bold;
+      z-index: 1000;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+      border: 3px solid #fff;
+    ">
+      🎉 Сундук открыт! 🎉<br>
+      <div style="font-size: 16px; margin-top: 10px; color: #333">
+        Вы потрясли устройство ${shakeCount} раз!
+      </div>
+    </div>
+  `;
+  
+  document.querySelector('main').appendChild(successMessage.firstElementChild);
+  
+  // Анимация появления
+  gsap.from(successMessage.firstElementChild, {
+    scale: 0,
+    opacity: 0,
+    duration: 0.5,
+    ease: "back.out(1.7)"
+  });
 }
 
 // Автоматическое уменьшение прогресса
@@ -454,11 +488,22 @@ window.resetProgress = function () {
   shakeSamples = [];
   lastAcceleration = null;
   console.log("Прогресс сброшен");
+  
+  // Показываем прогресс-бар снова
+  const progressContainer = document.getElementById("progress-container");
+  if (progressContainer) {
+    progressContainer.style.display = "block";
+    progressContainer.style.opacity = "1";
+    progressContainer.style.transform = "translateX(-50%) scale(1)";
+  }
 
   // Перезапускаем детектор
   if (window.DeviceMotionEvent) {
     startShakeDetection();
   }
+  
+  // Перезапускаем автоуменьшение
+  startProgressDecay();
 };
 
 window.getShakeStats = function () {
