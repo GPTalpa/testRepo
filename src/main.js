@@ -575,7 +575,6 @@ function openChest() {
   showSuccessMessage();
 }
 
-
 // Автоматическое уменьшение прогресса
 let decayInterval;
 
