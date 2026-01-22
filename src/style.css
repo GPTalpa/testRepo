@@ -98,8 +98,8 @@ main {
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  color: #000;
-  font-size: 18px;
+  color: #fff;
+  font-size: 24px;
   font-weight: bold;
   text-transform: uppercase;
   letter-spacing: 1px;
