@@ -644,10 +644,9 @@ function openChest() {
   const shakeHint = document.getElementById('shake-hint');
   if (shakeHint) shakeHint.remove();
 
-  // Анимация руки при открытии - ДОБАВЛЕНО плавное движение
+  // Анимация руки при открытии
   const hand = document.querySelector('.hand');
   if (hand) {
-    // Сначала торжественное поднятие
     gsap.to(hand, {
       rotation: 25,
       x: 50,
@@ -656,7 +655,6 @@ function openChest() {
       duration: 0.7,
       ease: "back.out(1.7)",
       onComplete: () => {
-        // Плавное покачивание в победе
         gsap.to(hand, {
           rotation: 20,
           x: 40,
@@ -666,7 +664,6 @@ function openChest() {
           yoyo: true,
           ease: "sine.inOut",
           onComplete: () => {
-            // Возврат в исходное положение с плавным движением
             gsap.to(hand, {
               rotation: 0,
               x: 0,
@@ -713,23 +710,63 @@ function openChest() {
     }
   );
 
-  // Анимация исчезновения прогресс-бара
-  gsap.to("#progress-container", {
+  // ОСНОВНОЕ ИЗМЕНЕНИЕ: Анимация преобразования прогресс-бара в кнопку
+  const progressContainer = document.getElementById("progress-container");
+  const progressBar = document.getElementById("progress-bar");
+  const bonusButton = document.getElementById("bonus-button");
+
+  // Сначала анимируем исчезновение текста "get a bonus"
+  gsap.to("#progress-container p", {
     opacity: 0,
-    scale: 0.8,
+    y: -20,
+    duration: 0.3,
+    ease: "power2.out",
+    onComplete: function() {
+      // Прячем текст полностью
+      document.querySelector("#progress-container p").style.display = "none";
+    }
+  });
+
+  // Затем анимируем прогресс-бар, чтобы он превратился в кнопку
+  gsap.to(progressBar, {
+    width: "100%",
+    height: "60px",
     duration: 0.7,
-    ease: "power2.inOut",
-    delay: 0.3,
-    onComplete: function () {
-      document.getElementById("progress-container").style.display = "none";
+    ease: "back.out(1.2)",
+    onComplete: function() {
+      // Прячем прогресс-контейнер
+      gsap.to(progressContainer, {
+        opacity: 0,
+        scale: 0.8,
+        duration: 0.3,
+        ease: "power2.out",
+        onComplete: function() {
+          progressContainer.style.display = "none";
+          
+          // Показываем кнопку с анимацией
+          bonusButton.style.display = "block";
+          gsap.fromTo(bonusButton,
+            {
+              opacity: 0,
+              scale: 0.8,
+              y: 20
+            },
+            {
+              opacity: 1,
+              scale: 1,
+              y: 0,
+              duration: 0.5,
+              ease: "back.out(1.7)",
+              delay: 0.2
+            }
+          );
+        }
+      });
     }
   });
 
   // Отключаем автоуменьшение прогресса
   stopProgressDecay();
-
-  // Показываем сообщение об успехе
-  showSuccessMessage();
 }
 
 // Автоматическое уменьшение прогресса

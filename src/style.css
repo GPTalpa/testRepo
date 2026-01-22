@@ -82,6 +82,7 @@ main {
   transform: translateX(-50%);
 }
 
+/* Существующие стили для прогресс-бара */
 #progress-bar {
   width: 0%;
   height: 100%;
@@ -90,6 +91,39 @@ main {
   transition: width 0.3s ease;
   position: relative;
   overflow: hidden;
+}
+
+/* Новые стили для кнопки */
+#bonus-button {
+  position: absolute;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 80%;
+  max-width: 400px;
+  height: 60px;
+  background-color: #ffc700;
+  border: none;
+  border-radius: 60px;
+  color: #000;
+  font-size: 18px;
+  font-weight: bold;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 20px rgba(255, 199, 0, 0.3);
+  z-index: 10;
+}
+
+#bonus-button:hover {
+  background-color: #ffd700;
+  transform: translateX(-50%) scale(1.05);
+  box-shadow: 0 6px 25px rgba(255, 199, 0, 0.4);
+}
+
+#bonus-button:active {
+  transform: translateX(-50%) scale(0.98);
 }
 
 /* Анимация блеска прогресс-бара */
