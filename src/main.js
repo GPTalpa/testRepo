@@ -575,46 +575,6 @@ function openChest() {
   showSuccessMessage();
 }
 
-// Показываем сообщение об успехе
-function showSuccessMessage() {
-  const successMessage = document.createElement('div');
-  successMessage.innerHTML = `
-    <div style="
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      background: linear-gradient(135deg, rgba(255, 215, 0, 0.95), rgba(255, 140, 0, 0.95));
-      color: #000;
-      padding: 30px 40px;
-      border-radius: 20px;
-      text-align: center;
-      font-family: Arial, sans-serif;
-      font-size: 24px;
-      font-weight: bold;
-      z-index: 1000;
-      box-shadow: 0 10px 30px rgba(0,0,0,0.3);
-      border: 3px solid #fff;
-    ">
-      🎉 Сундук открыт! 🎉<br>
-      <div style="font-size: 16px; margin-top: 10px; color: #333">
-        Вы потрясли устройство всего ${shakeCount} раз!
-      </div>
-      <div style="font-size: 14px; margin-top: 5px; color: #555">
-        Отличный результат!
-      </div>
-    </div>
-  `;
-  
-  document.querySelector('main').appendChild(successMessage.firstElementChild);
-  
-  gsap.from(successMessage.firstElementChild, {
-    scale: 0,
-    opacity: 0,
-    duration: 0.5,
-    ease: "back.out(1.7)"
-  });
-}
 
 // Автоматическое уменьшение прогресса
 let decayInterval;
