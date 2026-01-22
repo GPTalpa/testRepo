@@ -67,6 +67,12 @@ main {
   width: 80%;
   max-width: 400px;
   height: 39px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  font-weight: 600;
+  color: #fff;
   border-radius: 60px;
   background-color: rgba(17, 17, 20, 0.349); /* Альфа-канал в rgba */
 }
