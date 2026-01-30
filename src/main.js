@@ -406,25 +406,27 @@ function updateHandAnimation() {
   }
 }
 
-// Инициализация
 function init() {
   chest.src = frames[0];
   progressBar.style.width = "0%";
-  
-  // Анимация появления руки
-  animateHandIntro();
 
-  // Запускаем автоуменьшение прогресса
+  animateHandIntro();
   startProgressDecay();
 
-  // Запускаем детектор встряхивания
   if (window.DeviceMotionEvent) {
-    requestMotionPermission();
+    if (
+      IS_IOS &&
+      typeof DeviceMotionEvent.requestPermission === 'function'
+    ) {
+      setupIOSMotionPopup(); // 👈 только iPhone
+    } else {
+      startShakeDetection(); // Android / Desktop
+    }
   } else {
-    console.warn("DeviceMotion не поддерживается в этом браузере");
     setupClickFallback();
   }
 }
+
 
 // Запрос разрешения на доступ к акселерометру
 async function requestMotionPermission() {
@@ -966,3 +968,31 @@ setTimeout(() => {
     showRemainingShakes();
   }
 }, 2000);
+
+function setupIOSMotionPopup() {
+  const popup = document.getElementById('ios-motion-popup');
+  const btn = document.getElementById('ios-motion-btn');
+
+  if (!popup || !btn) return;
+
+  popup.style.display = 'flex';
+
+  btn.addEventListener('click', async () => {
+    try {
+      const permission = await DeviceMotionEvent.requestPermission();
+      if (permission === 'granted') {
+        console.log('iOS motion enabled');
+        popup.remove();
+        startShakeDetection();
+      } else {
+        console.warn('iOS motion denied');
+        popup.remove();
+        setupClickFallback();
+      }
+    } catch (e) {
+      console.error('Motion permission error', e);
+      popup.remove();
+      setupClickFallback();
+    }
+  });
+}

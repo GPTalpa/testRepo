@@ -15,6 +15,35 @@ main {
   position: relative;
 }
 
+.ios-motion-popup {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 9999;
+  padding: 14px 16px;
+  display: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+
+  background: rgba(0, 0, 0, 0.85);
+  backdrop-filter: blur(8px);
+  color: #fff;
+  font-size: 14px;
+}
+
+.ios-motion-popup button {
+  background: #FFD700;
+  color: #000;
+  border: none;
+  padding: 8px 14px;
+  border-radius: 6px;
+  font-weight: bold;
+  cursor: pointer;
+}
+
+
 #chest {
   max-width: 70%;
   position: absolute;

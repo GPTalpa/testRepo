@@ -1,10 +1,12 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Caswino</title>
 </head>
+
 <body>
     <main>
         <div class="content">
@@ -12,7 +14,7 @@
                 <img class="logo" src="./assets/logo.svg">
                 <p class="text"></p>
             </div>
-            
+
             <!-- Прогресс бар теперь в основном контейнере -->
             <div id="progress-container">
                 <p>get a bonus</p>
@@ -22,10 +24,17 @@
         </div>
         <img class="hand" src="./assets/hand.png" alt="hand">
         <img id="chest" src="./shaking1.png" alt="chest" />
+
+        <div id="ios-motion-popup" class="ios-motion-popup">
+            <span>Shake your phone to open the chest</span>
+            <button id="ios-motion-btn">ENABLE</button>
+        </div>
+
     </main>
 
 
     <script type="module" src="./main.js"></script>
 
 </body>
+
 </html>
