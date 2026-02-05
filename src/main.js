@@ -1,998 +1,285 @@
+console.log(1);
+
 import "./style.css";
 import gsap from "gsap";
 
-// Явно импортируем ВСЕ изображения
 import bg from './assets/bg.png';
 import logo from './assets/logo.svg';
-import hand from './assets/hand.png';
+import handImgSrc from './assets/hand.png';
 import shaking1 from './shaking1.png';
 import shaking2 from './shaking2.png';
 import shaking3 from './shaking3.png';
 
+/* ============================
+   iOS DETECT
+============================ */
+const IS_IOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+
+/* ============================
+   DOM
+============================ */
 const chest = document.getElementById("chest");
 const progressBar = document.getElementById("progress-bar");
-
-// Используем импортированные изображения
 const frames = [shaking1, shaking2, shaking3];
-
-// Устанавливаем начальное изображение
-chest.src = frames[0];
-
-// Устанавливаем другие изображения после загрузки DOM
-document.addEventListener('DOMContentLoaded', () => {
-  // Устанавливаем фон
-  document.querySelector('main').style.backgroundImage = `url(${bg})`;
-
-  // Устанавливаем логотип
-  const logoImg = document.querySelector('.logo');
-  if (logoImg) logoImg.src = logo;
-
-  // Устанавливаем руку
-  const handImg = document.querySelector('.hand');
-  if (handImg) handImg.src = hand;
-
-  // Инициализируем приложение
-  init();
-});
 
 let progress = 0;
 let isOpened = false;
-let isShaking = false;
 let lastShakeTime = 0;
 let lastAcceleration = null;
-let shakeCount = 0;
 let shakeSamples = [];
-const SHAKE_SAMPLE_SIZE = 5;
-
-// Конфигурация - ОСНОВНЫЕ ИЗМЕНЕНИЯ ДЛЯ 3-5 ТРЯСОК
-const CONFIG = {
-  shakeThreshold: 15,   // УВЕЛИЧИЛИ порог силы встряхивания
-  shakeTimeout: 500,    // Время между встряхиваниями (мс)
-  progressPerShake: 25, // УВЕЛИЧИЛИ для 4 трясок (100/4 = 25)
-  decayRate: 1.5,       // УВЕЛИЧИЛИ скорость уменьшения прогресса
-  minProgressForShaking2: 25, // УМЕНЬШИЛИ минимальный прогресс для shaking2.png
-  minShakeInterval: 200,      // Минимальный интервал между встряхиваниями
-  maxShakeSamples: 10,        // Максимальное количество образцов для усреднения
-  stabilityThreshold: 2.0,    // Порог стабильности
-  targetShakes: 4,            // Целевое количество трясок
-  progressDecayDelay: 2000,   // Задержка перед началом уменьшения прогресса (2 сек)
-  timeBetweenShakes: 500      // Максимальное время между трясками для сохранения прогресса
-};
-
-// Счетчик для отслеживания времени без тряски
+let shakeCount = 0;
 let lastProgressTime = Date.now();
-let shakeDurations = [];
-
-// ДОБАВЛЕНО: Переменная для управления анимацией плавного движения
+let decayInterval = null;
 let idleSidewaysAnimation = null;
 
-// Анимация встряхивания руки (интенсивная)
-function animateHandShake() {
-  const hand = document.querySelector('.hand');
-  if (!hand) return;
+const SHAKE_SAMPLE_SIZE = 5;
 
-  // Останавливаем текущую анимацию
-  gsap.killTweensOf(hand);
+/* ============================
+   CONFIG
+============================ */
+const CONFIG = {
+  shakeThreshold: 15,
+  minShakeInterval: 200,
+  progressPerShake: 25,
+  decayRate: 1.5,
+  progressDecayDelay: 2000,
+  minProgressForShaking2: 25
+};
 
-  // Анимация встряхивания
-  gsap.fromTo(hand,
-    { 
-      rotation: -15,
-      x: -10,
-      scale: 1.05
-    },
-    {
-      rotation: 15,
-      x: 10,
-      scale: 0.95,
-      duration: 0.08,
-      repeat: 5,
-      yoyo: true,
-      ease: "power1.inOut",
-      onComplete: () => {
-        // Возвращаем руку в исходное положение
-        gsap.to(hand, {
-          rotation: 0,
-          x: 0,
-          scale: 1,
-          duration: 0.2,
-          ease: "elastic.out(1, 0.5)",
-          onComplete: () => {
-            // После тряски возвращаемся к плавному движению
-            if (!isOpened) {
-              startIdleSidewaysAnimation();
-            }
-          }
-        });
-      }
-    }
-  );
-}
+/* ============================
+   INIT
+============================ */
+document.addEventListener('DOMContentLoaded', () => {
+  document.querySelector('main').style.backgroundImage = `url(${bg})`;
+  document.querySelector('.logo').src = logo;
+  document.querySelector('.hand').src = handImgSrc;
 
-// ДОБАВЛЕНО: Плавное движение из стороны в сторону (ожидание)
-function startIdleSidewaysAnimation() {
-  const hand = document.querySelector('.hand');
-  if (!hand || isOpened) return;
-
-  // Останавливаем предыдущую анимацию
-  if (idleSidewaysAnimation) {
-    idleSidewaysAnimation.kill();
-  }
-
-  // Плавное движение из стороны в сторону
-  idleSidewaysAnimation = gsap.to(hand, {
-    x: -20, // Движение влево
-    duration: 2.5,
-    ease: "sine.inOut",
-    yoyo: true,
-    repeat: -1,
-    repeatDelay: 0.5,
-    onRepeat: () => {
-      // Случайное изменение скорости и амплитуды для естественности
-      const randomSpeed = 1.8 + Math.random() * 1.5; // 1.8-3.3 секунды
-      const randomAmplitude = 15 + Math.random() * 10; // 15-25 пикселей
-      
-      idleSidewaysAnimation.duration(randomSpeed);
-      idleSidewaysAnimation.vars.x = -randomAmplitude;
-      idleSidewaysAnimation.vars.repeatDelay = 0.3 + Math.random() * 0.7;
-    }
-  });
-}
-
-// ДОБАВЛЕНО: Движение в такт прогрессу (активное состояние)
-function startActiveSidewaysAnimation() {
-  const hand = document.querySelector('.hand');
-  if (!hand || isOpened) return;
-
-  // Останавливаем предыдущую анимацию
-  if (idleSidewaysAnimation) {
-    idleSidewaysAnimation.kill();
-  }
-
-  // Более быстрое движение в такт прогрессу
-  idleSidewaysAnimation = gsap.to(hand, {
-    x: -25, // Большая амплитуда
-    duration: 1.2, // Быстрее
-    ease: "sine.inOut",
-    yoyo: true,
-    repeat: -1,
-    onRepeat: () => {
-      // Случайные вариации для естественности
-      const progressFactor = progress / 100;
-      const speed = 0.8 + (1 - progressFactor) * 0.8; // Ускоряется с прогрессом
-      const amplitude = 20 + progressFactor * 15; // Увеличивается с прогрессом
-      
-      idleSidewaysAnimation.duration(speed);
-      idleSidewaysAnimation.vars.x = -amplitude;
-    }
-  });
-}
-
-// ДОБАВЛЕНО: Предвкушающее движение (когда почти открыли)
-function startAnticipationAnimation() {
-  const hand = document.querySelector('.hand');
-  if (!hand || isOpened) return;
-
-  // Останавливаем предыдущую анимацию
-  if (idleSidewaysAnimation) {
-    idleSidewaysAnimation.kill();
-  }
-
-  // Очень быстрое волнение
-  idleSidewaysAnimation = gsap.to(hand, {
-    x: -30, // Максимальная амплитуда
-    duration: 0.6, // Очень быстро
-    ease: "power2.inOut",
-    yoyo: true,
-    repeat: -1,
-    onRepeat: () => {
-      // Добавляем немного дрожания
-      gsap.to(hand, {
-        rotation: 2,
-        duration: 0.1,
-        yoyo: true,
-        repeat: 1,
-        ease: "power1.inOut"
-      });
-    }
-  });
-}
-
-// Анимация руки при первом появлении
-function animateHandIntro() {
-  const hand = document.querySelector('.hand');
-  if (!hand) return;
-
-  // Сначала скрываем руку
-  gsap.set(hand, {
-    opacity: 0,
-    x: 100,
-    rotation: -30
-  });
-
-  // Анимация появления
-  gsap.to(hand, {
-    opacity: 1,
-    x: 0,
-    rotation: 0,
-    duration: 0.8,
-    ease: "back.out(1.7)",
-    delay: 0.5,
-    onComplete: () => {
-      // После появления начинаем плавное движение
-      if (!isOpened) {
-        startIdleSidewaysAnimation();
-      }
-    }
-  });
-}
-
-// Покачивание руки в ожидании (обновленная)
-function animateHandIdle() {
-  const hand = document.querySelector('.hand');
-  if (!hand) return;
-
-  // Останавливаем предыдущую анимацию ожидания
-  gsap.killTweensOf(hand);
-  
-  // Начинаем плавное движение из стороны в сторону
-  startIdleSidewaysAnimation();
-  
-  // Добавляем легкое вертикальное покачивание поверх горизонтального
-  gsap.to(hand, {
-    y: 3,
-    duration: 1.5,
-    repeat: -1,
-    yoyo: true,
-    ease: "sine.inOut"
-  });
-}
-
-// Интенсивная анимация при активном тряске (обновленная)
-function animateHandActive() {
-  const hand = document.querySelector('.hand');
-  if (!hand) return;
-
-  gsap.killTweensOf(hand);
-  
-  // Более активное движение из стороны в сторону
-  startActiveSidewaysAnimation();
-  
-  // Добавляем больше вращения
-  gsap.to(hand, {
-    rotation: 8,
-    y: 5,
-    duration: 0.5,
-    repeat: -1,
-    yoyo: true,
-    ease: "sine.inOut"
-  });
-}
-
-// Остановка анимации руки
-function stopHandAnimation() {
-  const hand = document.querySelector('.hand');
-  if (!hand) return;
-
-  gsap.killTweensOf(hand);
-  
-  // Останавливаем плавное движение
-  if (idleSidewaysAnimation) {
-    idleSidewaysAnimation.kill();
-    idleSidewaysAnimation = null;
-  }
-  
-  // Плавный возврат к исходному состоянию
-  gsap.to(hand, {
-    rotation: 0,
-    x: 0,
-    y: 0,
-    scale: 1,
-    duration: 0.5,
-    ease: "elastic.out(1, 0.5)"
-  });
-}
-
-// Анимация "совета" - подсказка трясти
-function animateHandHint() {
-  const hand = document.querySelector('.hand');
-  if (!hand) return;
-
-  // Сильная анимация для привлечения внимания
-  gsap.fromTo(hand,
-    { 
-      rotation: -20,
-      x: -30
-    },
-    {
-      rotation: 20,
-      x: 30,
-      duration: 0.5,
-      repeat: 1,
-      yoyo: true,
-      ease: "power2.inOut",
-      onComplete: () => {
-        // Возвращаем к легкому покачиванию
-        gsap.to(hand, {
-          rotation: 0,
-          x: 0,
-          duration: 0.3,
-          ease: "power2.out",
-          onComplete: () => {
-            // Возобновляем плавное движение
-            if (!isOpened) {
-              startIdleSidewaysAnimation();
-            }
-          }
-        });
-      }
-    }
-  );
-}
-
-// Обновление анимации руки в зависимости от прогресса
-function updateHandAnimation() {
-  if (isOpened) return;
-
-  const hand = document.querySelector('.hand');
-  if (!hand) return;
-
-  // Останавливаем предыдущие анимации
-  gsap.killTweensOf(hand);
-  
-  if (idleSidewaysAnimation) {
-    idleSidewaysAnimation.kill();
-    idleSidewaysAnimation = null;
-  }
-
-  if (progress < 25) {
-    // Мало прогресса - показываем подсказку если давно не трясли
-    if (Date.now() - lastShakeTime > 3000) {
-      animateHandHint();
-    } else {
-      // Обычное плавное движение
-      startIdleSidewaysAnimation();
-      
-      // Легкое вертикальное покачивание
-      gsap.to(hand, {
-        y: 2,
-        duration: 1.8,
-        repeat: -1,
-        yoyo: true,
-        ease: "sine.inOut"
-      });
-    }
-  } else if (progress < 50) {
-    // Средний прогресс - активная анимация
-    startActiveSidewaysAnimation();
-    
-    // Больше вращения
-    gsap.to(hand, {
-      rotation: 5,
-      y: 3,
-      duration: 0.8,
-      repeat: -1,
-      yoyo: true,
-      ease: "sine.inOut"
-    });
-  } else if (progress < 75) {
-    // Больше половины - интенсивная анимация
-    startActiveSidewaysAnimation();
-    
-    // Еще больше движения
-    gsap.to(hand, {
-      rotation: 10,
-      y: 8,
-      scale: 1.05,
-      duration: 0.5,
-      repeat: -1,
-      yoyo: true,
-      ease: "power1.inOut"
-    });
-  } else {
-    // Почти готово - предвкушающая анимация
-    startAnticipationAnimation();
-    
-    // Максимальное волнение
-    gsap.to(hand, {
-      rotation: 15,
-      y: 10,
-      scale: 1.1,
-      duration: 0.3,
-      repeat: -1,
-      yoyo: true,
-      ease: "power1.inOut"
-    });
-  }
-}
-
-function init() {
   chest.src = frames[0];
   progressBar.style.width = "0%";
 
   animateHandIntro();
   startProgressDecay();
 
-  if (window.DeviceMotionEvent) {
-    if (
-      IS_IOS &&
-      typeof DeviceMotionEvent.requestPermission === 'function'
-    ) {
-      setupIOSMotionPopup(); // 👈 только iPhone
-    } else {
-      startShakeDetection(); // Android / Desktop
-    }
-  } else {
+  if (!window.DeviceMotionEvent) {
     setupClickFallback();
-  }
-}
-
-
-// Запрос разрешения на доступ к акселерометру
-async function requestMotionPermission() {
-  if (typeof DeviceMotionEvent !== 'undefined' &&
-    typeof DeviceMotionEvent.requestPermission === 'function') {
-    try {
-      const permission = await DeviceMotionEvent.requestPermission();
-      if (permission === 'granted') {
-        console.log("Разрешение на доступ к акселерометру получено");
-        startShakeDetection();
-      } else {
-        console.warn("Разрешение на доступ к акселерометру отклонено");
-        setupClickFallback();
-      }
-    } catch (error) {
-      console.error("Ошибка при запросе разрешения:", error);
-      setupClickFallback();
-    }
-  } else {
-    startShakeDetection();
-  }
-}
-
-// Улучшенный детектор встряхивания
-function startShakeDetection() {
-  let lastUpdate = 0;
-  const updateInterval = 100;
-
-  window.addEventListener('devicemotion', (event) => {
-    const now = Date.now();
-    if (now - lastUpdate < updateInterval) return;
-    lastUpdate = now;
-
-    const acceleration = event.accelerationIncludingGravity ||
-      event.acceleration ||
-      { x: 0, y: 0, z: 0 };
-
-    if (acceleration.x === null || acceleration.y === null || acceleration.z === null) {
-      return;
-    }
-
-    if (!lastAcceleration) {
-      lastAcceleration = {
-        x: acceleration.x || 0,
-        y: acceleration.y || 0,
-        z: acceleration.z || 0
-      };
-      return;
-    }
-
-    const delta = {
-      x: Math.abs(acceleration.x - lastAcceleration.x),
-      y: Math.abs(acceleration.y - lastAcceleration.y),
-      z: Math.abs(acceleration.z - lastAcceleration.z)
-    };
-
-    const totalDelta = Math.sqrt(delta.x * delta.x + delta.y * delta.y + delta.z * delta.z);
-    const currentMagnitude = Math.sqrt(
-      acceleration.x * acceleration.x +
-      acceleration.y * acceleration.y +
-      acceleration.z * acceleration.z
-    );
-
-    shakeSamples.push(totalDelta);
-    if (shakeSamples.length > SHAKE_SAMPLE_SIZE) {
-      shakeSamples.shift();
-    }
-
-    const averageDelta = shakeSamples.length > 0 ?
-      shakeSamples.reduce((a, b) => a + b, 0) / shakeSamples.length : 0;
-
-    if (totalDelta > CONFIG.shakeThreshold &&
-      averageDelta > CONFIG.shakeThreshold * 0.7 &&
-      currentMagnitude > CONFIG.stabilityThreshold) {
-      handleShake();
-    }
-
-    lastAcceleration = {
-      x: acceleration.x || 0,
-      y: acceleration.y || 0,
-      z: acceleration.z || 0
-    };
-  });
-
-  console.log("Детектор встряхивания запущен");
-}
-
-// Обработка встряхивания
-function handleShake() {
-  const currentTime = Date.now();
-
-  if (currentTime - lastShakeTime < CONFIG.minShakeInterval) {
     return;
   }
 
-  // Сохраняем время между трясками
-  if (lastShakeTime > 0) {
-    const duration = currentTime - lastShakeTime;
-    shakeDurations.push(duration);
-    if (shakeDurations.length > 5) {
-      shakeDurations.shift();
-    }
+  // iOS — ТОЛЬКО через клик
+  if (
+    IS_IOS &&
+    typeof DeviceMotionEvent.requestPermission === 'function'
+  ) {
+    setupIOSMotionPopup();
+  } else {
+    startShakeDetection(); // Android / Desktop
   }
+});
 
-  lastShakeTime = currentTime;
-  lastProgressTime = currentTime; // Сбрасываем таймер уменьшения
+/* ============================
+   iOS PERMISSION
+============================ */
+function setupIOSMotionPopup() {
+  const popup = document.getElementById('ios-motion-popup');
+  const btn = document.getElementById('ios-motion-btn');
+  if (!popup || !btn) return;
+
+  popup.style.display = 'flex';
+
+  btn.onclick = async () => {
+    try {
+      const res = await DeviceMotionEvent.requestPermission();
+      popup.remove();
+
+      if (res === 'granted') {
+        startShakeDetection();
+      } else {
+        setupClickFallback();
+      }
+    } catch (e) {
+      popup.remove();
+      setupClickFallback();
+    }
+  };
+}
+
+/* ============================
+   SHAKE DETECTION
+============================ */
+function startShakeDetection() {
+  console.log('Shake detection started');
+
+  window.addEventListener('devicemotion', (event) => {
+    const acc = event.accelerationIncludingGravity;
+    if (!acc) return;
+
+    if (!lastAcceleration) {
+      lastAcceleration = { x: acc.x, y: acc.y, z: acc.z };
+      return;
+    }
+
+    const deltaX = Math.abs(acc.x - lastAcceleration.x);
+    const deltaY = Math.abs(acc.y - lastAcceleration.y);
+    const deltaZ = Math.abs(acc.z - lastAcceleration.z);
+    const totalDelta = Math.sqrt(deltaX**2 + deltaY**2 + deltaZ**2);
+
+    shakeSamples.push(totalDelta);
+    if (shakeSamples.length > SHAKE_SAMPLE_SIZE) shakeSamples.shift();
+
+    const avg =
+      shakeSamples.reduce((a, b) => a + b, 0) / shakeSamples.length;
+
+    if (
+      totalDelta > CONFIG.shakeThreshold &&
+      avg > CONFIG.shakeThreshold * 0.7
+    ) {
+      handleShake();
+    }
+
+    lastAcceleration = { x: acc.x, y: acc.y, z: acc.z };
+  });
+}
+
+/* ============================
+   SHAKE HANDLER
+============================ */
+function handleShake() {
+  const now = Date.now();
+  if (now - lastShakeTime < CONFIG.minShakeInterval || isOpened) return;
+
+  lastShakeTime = now;
+  lastProgressTime = now;
   shakeCount++;
 
-  console.log(`Встряхивание #${shakeCount} обнаружено! Прогресс: ${progress + CONFIG.progressPerShake}%`);
-
-  // Визуальная обратная связь
   flashScreen();
-  
-  // Анимация руки
   animateHandShake();
-
-  // Увеличиваем прогресс
   updateProgress(CONFIG.progressPerShake);
-  
-  // Обновляем анимацию руки
-  updateHandAnimation();
-
-  // Показываем подсказку сколько осталось
-  showRemainingShakes();
 }
 
-// Мигание экрана при встряхивании
-function flashScreen() {
-  gsap.fromTo(document.body,
-    { backgroundColor: 'rgba(255, 255, 0, 0.1)' },
-    {
-      backgroundColor: 'rgba(255, 255, 0, 0)',
-      duration: 0.3,
-      ease: "power2.out"
-    }
-  );
-}
+/* ============================
+   PROGRESS
+============================ */
+function updateProgress(amount) {
+  progress = Math.min(progress + amount, 100);
 
-// Обновление прогресса
-function updateProgress(increment) {
-  if (isOpened) return;
-
-  progress = Math.min(progress + increment, 100);
-  lastProgressTime = Date.now();
-
-  // Анимация прогресс-бара
   gsap.to(progressBar, {
     width: `${progress}%`,
     duration: 0.3,
     ease: "power2.out",
-    onUpdate: function () {
-      updateChestImage();
-    }
+    onUpdate: updateChestImage
   });
 
-  // Если достигли 100%, открываем сундук
   if (progress >= 100 && !isOpened) {
     openChest();
   }
 }
 
-// Обновление картинки сундука
 function updateChestImage() {
   if (isOpened) return;
-
-  if (progress < CONFIG.minProgressForShaking2) {
-    if (chest.src !== frames[0]) {
-      chest.src = frames[0];
-      isShaking = false;
-    }
-  } else if (progress < 100) {
-    if (chest.src !== frames[1]) {
-      chest.src = frames[1];
-      isShaking = true;
-    }
-
-    if (Date.now() - lastShakeTime < 500) {
-      animateShaking();
-    }
-  }
+  chest.src = progress < CONFIG.minProgressForShaking2 ? frames[0] : frames[1];
 }
 
-// Анимация встряхивания сундука
-function animateShaking() {
-  if (isOpened) return;
-
-  gsap.killTweensOf(chest);
-
-  gsap.fromTo(chest,
-    { x: -5, rotation: -2 },
-    {
-      x: 5,
-      rotation: 2,
-      duration: 0.08,
-      repeat: 3,
-      yoyo: true,
-      ease: "power1.inOut",
-      onComplete: () => {
-        gsap.to(chest, { x: 0, rotation: 0, duration: 0.1 });
-        isShaking = false;
-      }
-    }
-  );
-}
-
-// Открытие сундука
-function openChest() {
-  isOpened = true;
-  chest.src = frames[2];
-
-  console.log(`Сундук открыт! Потребовалось ${shakeCount} встряхиваний`);
-
-  // Останавливаем анимации руки
-  stopHandAnimation();
-  
-  // Удаляем подсказку оставшихся трясок
-  const shakeHint = document.getElementById('shake-hint');
-  if (shakeHint) shakeHint.remove();
-
-  // Анимация руки при открытии
-  const hand = document.querySelector('.hand');
-  if (hand) {
-    gsap.to(hand, {
-      rotation: 25,
-      x: 50,
-      y: -20,
-      scale: 1.2,
-      duration: 0.7,
-      ease: "back.out(1.7)",
-      onComplete: () => {
-        gsap.to(hand, {
-          rotation: 20,
-          x: 40,
-          y: -15,
-          duration: 0.5,
-          repeat: 3,
-          yoyo: true,
-          ease: "sine.inOut",
-          onComplete: () => {
-            gsap.to(hand, {
-              rotation: 0,
-              x: 0,
-              y: 0,
-              scale: 1,
-              duration: 1.2,
-              ease: "elastic.out(1, 0.5)",
-              delay: 0.5
-            });
-          }
-        });
-      }
-    });
-  }
-
-  // Анимация прогресс-бара
-  gsap.to("#progress-bar", {
-    background: "linear-gradient(90deg, #FFD700, #FF8C00, #FF4500)",
-    duration: 0.3,
-    ease: "power2.out"
-  });
-
-  // Вибрация
-  if (navigator.vibrate) {
-    navigator.vibrate([100, 50, 100, 50, 100]);
-  }
-
-  // Анимация открытия сундука
-  gsap.to(chest, {
-    scale: 1.15,
-    duration: 0.5,
-    yoyo: true,
-    repeat: 1,
-    ease: "power2.inOut"
-  });
-
-  gsap.fromTo(chest,
-    { filter: "brightness(1) drop-shadow(0 0 0px gold)" },
-    {
-      filter: "brightness(1.3) drop-shadow(0 0 20px gold)",
-      duration: 0.5,
-      repeat: 1,
-      yoyo: true
-    }
-  );
-
-  // Упрощенная анимация: просто меняем прогресс-бар на кнопку
-  const progressBar = document.getElementById("progress-bar");
-  
-  // Сначала анимируем исчезновение верхнего текста
-  gsap.to("#progress-container p", {
-    opacity: 0,
-    y: -10,
-    duration: 0.3,
-    ease: "power2.out"
-  });
-
-  // Затем расширяем прогресс-бар до 100% (если еще не на 100%)
-  gsap.to(progressBar, {
-    width: "100%",
-    duration: 0.5,
-    ease: "power2.out",
-    onComplete: function() {
-      // Добавляем текст в прогресс-бар
-      progressBar.innerHTML = '<span>GET YOUR BONUS</span>';
-      
-      // Стилизуем текст
-      const span = progressBar.querySelector('span');
-      span.style.cssText = `
-        position: absolute;
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -50%);
-        color: #000;
-        font-size: 18px;
-        font-weight: bold;
-        text-transform: uppercase;
-        letter-spacing: 1px;
-        white-space: nowrap;
-        opacity: 0;
-      `;
-      
-      // Анимация появления текста
-      gsap.to(span, {
-        opacity: 1,
-        duration: 0.5,
-        ease: "power2.out",
-        delay: 0.2
-      });
-      
-      // Делаем прогресс-бар кликабельным
-      progressBar.style.cursor = "pointer";
-      progressBar.style.pointerEvents = "auto";
-      
-      // Добавляем обработчик клика
-      progressBar.addEventListener('click', handleBonusClick);
-    }
-  });
-
-  // Отключаем автоуменьшение прогресса
-  stopProgressDecay();
-}
-
-// Обработчик клика по бонусу
-function handleBonusClick() {
-  console.log("Бонус получен!");
-  
-  // Анимация нажатия
-  gsap.to(this, {
-    scale: 0.95,
-    duration: 0.1,
-    yoyo: true,
-    repeat: 1,
-    ease: "power1.inOut",
-    onComplete: () => {
-      // Меняем текст
-      const span = this.querySelector('span');
-      if (span) {
-        span.textContent = "BONUS CLAIMED!";
-        gsap.to(this, {
-          background: "linear-gradient(90deg, #4CAF50, #45a049)",
-          duration: 0.3,
-          ease: "power2.out"
-        });
-      }
-      
-      // Вибрация
-      if (navigator.vibrate) {
-        navigator.vibrate([50, 30, 50]);
-      }
-      
-      // Убираем кликабельность
-      this.style.cursor = "default";
-      this.style.pointerEvents = "none";
-      
-      // Через 2 секунды сбрасываем игру
-      setTimeout(() => {
-        resetProgress();
-      }, 2000);
-    }
-  });
-}
-
-// Автоматическое уменьшение прогресса
-let decayInterval;
-
+/* ============================
+   DECAY
+============================ */
 function startProgressDecay() {
   decayInterval = setInterval(() => {
-    if (progress > 0 && !isOpened) {
-      const currentTime = Date.now();
-      const timeSinceLastProgress = currentTime - lastProgressTime;
-      
-      // Начинаем уменьшать прогресс только если прошло больше 2 секунд без тряски
-      if (timeSinceLastProgress > CONFIG.progressDecayDelay) {
-        const oldProgress = progress;
-        progress = Math.max(progress - CONFIG.decayRate, 0);
+    if (progress <= 0 || isOpened) return;
 
-        gsap.to(progressBar, {
-          width: `${progress}%`,
-          duration: 0.5,
-          ease: "power1.out",
-          onUpdate: () => {
-            if (progress < CONFIG.minProgressForShaking2 && oldProgress >= CONFIG.minProgressForShaking2) {
-              chest.src = frames[0];
-              isShaking = false;
-              updateHandAnimation();
-            }
-          }
-        });
-        
-        // Если прогресс упал до 0, сбрасываем счетчик трясок
-        if (progress === 0) {
-          shakeCount = 0;
-          shakeDurations = [];
-        }
-      }
+    if (Date.now() - lastProgressTime > CONFIG.progressDecayDelay) {
+      progress = Math.max(progress - CONFIG.decayRate, 0);
+      progressBar.style.width = `${progress}%`;
     }
   }, 1000);
 }
 
-function stopProgressDecay() {
-  if (decayInterval) {
-    clearInterval(decayInterval);
-  }
+/* ============================
+   OPEN CHEST
+============================ */
+function openChest() {
+  isOpened = true;
+  chest.src = frames[2];
+
+  stopHandAnimation();
+
+  gsap.to(chest, {
+    scale: 1.15,
+    duration: 0.4,
+    yoyo: true,
+    repeat: 1
+  });
+
+  progressBar.innerHTML = `<span>GET YOUR BONUS</span>`;
+  progressBar.style.cursor = "pointer";
+  progressBar.onclick = () => location.reload();
 }
 
-let clickCount = 0;
-
-function handleClickForShake(e) {
-  if (isOpened) return;
-
-  if (e.target.closest('div[style*="bottom: 20px"]')) {
-    return;
-  }
-
-  clickCount++;
-  
-  // Эмулируем handleShake
-  handleShake();
-  
-  // Визуальная обратная связь для клика
-  gsap.fromTo(document.body,
-    { backgroundColor: 'rgba(255, 100, 0, 0.1)' },
+/* ============================
+   HAND ANIMATIONS
+============================ */
+function animateHandIntro() {
+  const hand = document.querySelector('.hand');
+  gsap.fromTo(hand,
+    { opacity: 0, x: 100, rotation: -30 },
     {
-      backgroundColor: 'rgba(255, 100, 0, 0)',
-      duration: 0.2,
-      ease: "power2.out"
+      opacity: 1,
+      x: 0,
+      rotation: 0,
+      duration: 0.8,
+      ease: "back.out(1.7)",
+      onComplete: startIdleSidewaysAnimation
     }
   );
 }
 
-// Для отладки в консоли
-window.debugProgress = function (amount = 25) {
-  updateProgress(amount);
-  updateHandAnimation();
-  showRemainingShakes();
-};
+function animateHandShake() {
+  const hand = document.querySelector('.hand');
+  gsap.killTweensOf(hand);
 
-window.resetProgress = function () {
-  progress = 0;
-  isOpened = false;
-  chest.src = frames[0];
-  progressBar.style.width = '0%';
-  progressBar.style.height = '100%'; // Восстанавливаем высоту
-  shakeCount = 0;
-  clickCount = 0;
-  shakeSamples = [];
-  shakeDurations = [];
-  lastAcceleration = null;
-  lastProgressTime = Date.now();
-  console.log("Прогресс сброшен");
-  
-  // Останавливаем анимацию плавного движения
-  if (idleSidewaysAnimation) {
-    idleSidewaysAnimation.kill();
-    idleSidewaysAnimation = null;
-  }
-  
-  // Удаляем подсказки
-  const shakeHint = document.getElementById('shake-hint');
-  if (shakeHint) shakeHint.remove();
-  
-  const successMsg = document.querySelector('div[style*="background: linear-gradient(135deg, rgba(255, 215, 0, 0.95)"]');
-  if (successMsg) successMsg.remove();
-  
-  // Восстанавливаем прогресс-контейнер
-  const progressContainer = document.getElementById("progress-container");
-  if (progressContainer) {
-    progressContainer.style.display = "block";
-    progressContainer.style.opacity = "1";
-    progressContainer.style.transform = "translateX(-50%) scale(1)";
-    
-    // Восстанавливаем текст
-    const progressText = document.querySelector("#progress-container p");
-    if (progressText) {
-      progressText.style.display = "block";
-      progressText.style.opacity = "1";
-      progressText.style.transform = "translateY(0)";
+  gsap.fromTo(hand,
+    { rotation: -15, x: -10 },
+    {
+      rotation: 15,
+      x: 10,
+      duration: 0.08,
+      repeat: 5,
+      yoyo: true,
+      onComplete: startIdleSidewaysAnimation
     }
-  }
+  );
+}
 
-  // Скрываем кнопку бонуса
-  const bonusButton = document.getElementById("bonus-button");
-  if (bonusButton) {
-    bonusButton.style.display = "none";
-  }
-  
-  // Восстанавливаем анимацию руки
-  stopHandAnimation();
-  setTimeout(() => {
-    startIdleSidewaysAnimation();
-  }, 500);
-  
-  // Перезапускаем детектор
-  if (window.DeviceMotionEvent) {
-    startShakeDetection();
-  }
-  
-  // Перезапускаем автоуменьшение
-  startProgressDecay();
-};
+function startIdleSidewaysAnimation() {
+  const hand = document.querySelector('.hand');
+  if (idleSidewaysAnimation) idleSidewaysAnimation.kill();
 
-window.getShakeStats = function () {
-  const remainingShakes = Math.ceil((100 - progress) / CONFIG.progressPerShake);
-  return {
-    progress,
-    shakeCount,
-    remainingShakes,
-    lastShakeTime,
-    shakeSamples,
-    isOpened,
-    requiredShakes: CONFIG.targetShakes,
-    progressPerShake: CONFIG.progressPerShake
-  };
-};
-
-// Показываем подсказку при старте
-setTimeout(() => {
-  if (progress === 0 && !isOpened) {
-    showRemainingShakes();
-  }
-}, 2000);
-
-function setupIOSMotionPopup() {
-  const popup = document.getElementById('ios-motion-popup');
-  const btn = document.getElementById('ios-motion-btn');
-
-  if (!popup || !btn) return;
-
-  popup.style.display = 'flex';
-
-  btn.addEventListener('click', async () => {
-    try {
-      const permission = await DeviceMotionEvent.requestPermission();
-      if (permission === 'granted') {
-        console.log('iOS motion enabled');
-        popup.remove();
-        startShakeDetection();
-      } else {
-        console.warn('iOS motion denied');
-        popup.remove();
-        setupClickFallback();
-      }
-    } catch (e) {
-      console.error('Motion permission error', e);
-      popup.remove();
-      setupClickFallback();
-    }
+  idleSidewaysAnimation = gsap.to(hand, {
+    x: -20,
+    duration: 2.5,
+    yoyo: true,
+    repeat: -1,
+    ease: "sine.inOut"
   });
+}
+
+function stopHandAnimation() {
+  const hand = document.querySelector('.hand');
+  gsap.killTweensOf(hand);
+}
+
+/* ============================
+   FALLBACK CLICK
+============================ */
+function setupClickFallback() {
+  document.body.addEventListener('click', handleShake);
+}
+
+/* ============================
+   FX
+============================ */
+function flashScreen() {
+  gsap.fromTo(document.body,
+    { backgroundColor: 'rgba(255,255,0,0.15)' },
+    { backgroundColor: 'rgba(255,255,0,0)', duration: 0.25 }
+  );
 }
